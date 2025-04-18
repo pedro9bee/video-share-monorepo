@@ -1,0 +1,19 @@
+// packages/backend/tsconfig.json
+{
+    "compilerOptions": {
+      "target": "ES2016", // Ou mais recente (ES2020, ESNext)
+      "module": "CommonJS", // Padrão para Node.js
+      "outDir": "./dist", // Onde o JS compilado será salvo
+      "rootDir": "./src", // Onde estão os arquivos TS fonte
+      "strict": true, // Habilita verificações estritas (recomendado)
+      "esModuleInterop": true, // Permite importações estilo ES6 de módulos CommonJS
+      "skipLibCheck": true, // Pula verificação de tipos em arquivos de declaração (d.ts)
+      "forceConsistentCasingInFileNames": true, // Garante consistência no nome dos arquivos
+      "resolveJsonModule": true, // Permite importar arquivos JSON
+      "sourceMap": true, // Gera sourcemaps para debug
+      // "noUnusedLocals": true, // (Opcional) Avisa sobre variáveis não usadas
+      // "noUnusedParameters": true // (Opcional) Avisa sobre parâmetros não usados
+    },
+    "include": ["src/**/*"], // Inclui todos os arquivos TS dentro de src
+    "exclude": ["node_modules", "dist", "public", "stats"] // Exclui pastas
+  }

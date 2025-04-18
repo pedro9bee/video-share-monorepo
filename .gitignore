@@ -5,6 +5,7 @@ node_modules/
 # Build artifacts
 packages/frontend/dist/
 packages/backend/public/
+packages/backend/dist/
 
 # Logs and Stats
 **/stats/

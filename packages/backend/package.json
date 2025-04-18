@@ -2,18 +2,28 @@
   "name": "video-share-backend",
   "version": "1.0.0",
   "description": "Backend server for video sharing",
-  "main": "src/server.js",
+  "main": "dist/index.js",
   "scripts": {
-    "start": "node src/server.js",
-    "dev": "nodemon src/server.js"
+    "build": "tsc",
+    "start": "cross-env NODE_ENV=production node dist/index.js",
+    "dev": "ts-node-dev --respawn --transpile-only --ignore-watch node_modules --no-notify src/index.ts",
+    "clean": "rm -rf dist"
   },
   "dependencies": {
+    "cors": "^2.8.5",
     "dotenv": "^16.0.0",
     "express": "^4.18.2",
     "mime-types": "^2.1.35",
     "qrcode-terminal": "^0.12.0"
   },
   "devDependencies": {
-    "nodemon": "^2.0.15"
+    "@types/cors": "^2.8.17",
+    "@types/dotenv": "^8.2.0",
+    "@types/express": "^4.17.13",
+    "@types/mime-types": "^2.1.1",
+    "@types/node": "^18.0.0",
+    "@types/qrcode-terminal": "^0.12.0",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.3.3" 
   }
 }

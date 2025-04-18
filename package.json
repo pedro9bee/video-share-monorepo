@@ -7,15 +7,18 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "npm run build -w video-share-frontend",
+    "build": "npm run build -w video-share-backend && npm run build -w video-share-frontend",
+    "start": "npm run start -w video-share-backend",
     "start:backend": "npm run start -w video-share-backend",
     "dev:frontend": "npm run dev -w video-share-frontend",
-    "dev": "concurrently \"npm:dev:frontend\" \"npm:start:backend\"",
-    "install:all": "npm install",
-    "start": "npm run start:backend:prod" 
+    "dev:backend": "cross-env NODE_ENV=development npm run dev -w video-share-backend",
+    "dev": "concurrently \"npm:dev:frontend\" \"npm:dev:backend\""
   },
   "devDependencies": {
     "concurrently": "^7.0.0",
     "cross-env": "^7.0.3"
+  },
+  "dependencies": {
+    "@rollup/plugin-replace": "^6.0.2"
   }
 }

@@ -28,3 +28,12 @@ Monorepo para a aplicação de compartilhamento de vídeos com frontend e backen
     npm run dev
     ```
 
+# Garanta que tudo está commitado
+git add .
+git commit -m "feat: workspaces"
+
+# Crie a nova tag
+git tag -a v1.0.0 -m "Multiple Workspaces"
+
+# Envie a tag para o repositório remoto
+git push origin v1.0.0

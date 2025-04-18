@@ -1,34 +1,43 @@
-// Importa o CSS principal para que o Rollup o processe
+// packages/frontend/src/main.js
 import './styles.css';
 
 console.log('[Frontend] Script inicializado.');
+
+// --- CONSTANTES ---
+// Define a URL do backend baseado em desenvolvimento ou produção
+// Em desenvolvimento, frontend está em 8080, backend em 3000
+// Em produção, frontend e backend são servidos da mesma origem
+// Usando uma verificação simples (ROLLUP_WATCH é definido por rollup -w)
+const IS_DEV = process.env.ROLLUP_WATCH;
+const BACKEND_URL = IS_DEV ? 'http://localhost:3000' : ''; // Assume mesma origem em produção
+console.log(`[Frontend] Modo: ${IS_DEV ? 'Desenvolvimento' : 'Produção'}. URL do Backend: '${BACKEND_URL || window.location.origin}'`);
 
 // --- Seletores DOM ---
 const videoPlayer = document.getElementById('videoPlayer');
 const errorMessage = document.getElementById('errorMessage');
 
 // --- Estado do Tracking ---
-let sessionId = null; // Será gerado no primeiro evento
+let sessionId = null;
 let startTime = null;
 let watchDuration = 0;
 let isPlaying = false;
 let heartbeatInterval = null;
-let viewStarted = false; // Flag para garantir que 'start' seja enviado apenas uma vez
+let viewStarted = false;
 
 // --- Funções Auxiliares ---
 
-// Gera um ID único para a sessão
 function generateSessionId() {
     return Math.random().toString(36).substring(2, 15) + Date.now().toString(36) + Math.random().toString(36).substring(2, 15);
 }
 
-// Envia dados de tracking para o backend
 async function sendTrackingData(endpoint, data) {
     if (!sessionId) {
         console.warn("[Tracking] Session ID não gerado ainda.");
-        return; // Não envia se não tem session ID
+        return;
     }
-    const url = `/track/${endpoint}`; // URL relativa ao backend
+    // Usa a URL absoluta do backend
+    const url = `${BACKEND_URL}/track/${endpoint}`; // <-- Usa URL absoluta
+    console.log(`[Tracking] Enviando para: ${url}`); // Log da URL sendo atingida
     try {
         const response = await fetch(url, {
             method: 'POST',
@@ -38,24 +47,22 @@ async function sendTrackingData(endpoint, data) {
         });
         if (!response.ok) {
             console.error(`[Tracking] Erro ao enviar para ${endpoint}: ${response.status} ${response.statusText}`);
+            // Poderia tentar parsear response.text() para ver se o backend enviou uma mensagem de erro
         } else {
             console.log(`[Tracking] Evento '${endpoint}' enviado.`);
         }
     } catch (error) {
-        console.error(`[Tracking] Falha na requisição para ${endpoint}:`, error);
+        console.error(`[Tracking] Falha na requisição para ${endpoint} (${url}):`, error);
     }
 }
 
 // --- Lógica de Tracking ---
 
-// Inicia a sessão e envia o evento 'start'
 function startTrackingSession() {
     if (viewStarted) return; // Já iniciado
-
     sessionId = generateSessionId();
     viewStarted = true;
     console.log(`[Tracking] Iniciando sessão: ${sessionId}`);
-
     sendTrackingData('start', {
         userAgent: navigator.userAgent,
         language: navigator.language,
@@ -64,9 +71,8 @@ function startTrackingSession() {
     });
 }
 
-// Inicia o heartbeat para manter a sessão ativa
 function startHeartbeat() {
-    clearInterval(heartbeatInterval); // Limpa intervalo anterior
+    clearInterval(heartbeatInterval);
     heartbeatInterval = setInterval(() => {
         if (isPlaying && videoPlayer.duration > 0) {
             const currentPlayDuration = (new Date() - startTime) / 1000;
@@ -75,136 +81,134 @@ function startHeartbeat() {
                 progress: videoPlayer.currentTime / videoPlayer.duration
             });
         } else if (!isPlaying) {
-            // Se estiver pausado, parar o heartbeat
             clearInterval(heartbeatInterval);
         }
     }, 30000); // A cada 30 segundos
 }
 
-// Calcula e acumula a duração assistida
 function updateWatchDuration() {
     if (isPlaying && startTime) {
         const segmentDuration = (new Date() - startTime) / 1000;
         watchDuration += segmentDuration;
-        startTime = new Date(); // Reseta startTime para o próximo segmento
+        startTime = new Date();
         console.log(`[Tracking] Duração acumulada: ${watchDuration.toFixed(2)}s`);
     }
 }
 
 // --- Event Listeners do Vídeo ---
 
-videoPlayer.addEventListener('error', () => {
-    const error = videoPlayer.error;
-    console.error('[Player] Erro:', error);
-    errorMessage.textContent = `Erro ao carregar vídeo: ${error ? error.message : 'desconhecido'} (Code: ${error?.code})`;
-    errorMessage.style.display = 'block';
-    if (viewStarted) { // Só envia erro se a sessão começou
-        sendTrackingData('error', {
-            errorCode: error ? error.code : 'unknown',
-            errorMessage: error ? error.message : 'Erro desconhecido'
-        });
-    }
-});
+if (videoPlayer) { // Garante que videoPlayer existe
+    videoPlayer.addEventListener('error', () => {
+        const error = videoPlayer.error;
+        console.error('[Player] Erro:', error);
+        errorMessage.textContent = `Erro ao carregar vídeo: ${error ? error.message : 'desconhecido'} (Code: ${error?.code})`;
+        errorMessage.style.display = 'block';
+        if (viewStarted) {
+            sendTrackingData('error', {
+                errorCode: error ? error.code : 'unknown',
+                errorMessage: error ? error.message : 'Erro desconhecido'
+            });
+        }
+    });
 
-// Evento 'play' é disparado ao iniciar ou retomar
-videoPlayer.addEventListener('play', () => {
-    console.log('[Player] Play');
-    if (!viewStarted) {
-        startTrackingSession(); // Inicia a sessão no primeiro play
-    }
-    isPlaying = true;
-    startTime = new Date(); // Marca o início do segmento de play
-    errorMessage.style.display = 'none';
-    startHeartbeat(); // Inicia ou reinicia o heartbeat
-});
-
-// Evento 'playing' é disparado quando o vídeo realmente começa a tocar após buffer/seek
-videoPlayer.addEventListener('playing', () => {
-    console.log('[Player] Playing (após buffer/seek)');
-    // Garante que o estado 'isPlaying' e 'startTime' estejam corretos
-    if (!isPlaying) {
+    videoPlayer.addEventListener('play', () => {
+        console.log('[Player] Play');
+        if (!viewStarted) {
+            startTrackingSession();
+        }
         isPlaying = true;
         startTime = new Date();
-        if (!viewStarted) startTrackingSession();
+        errorMessage.style.display = 'none';
         startHeartbeat();
-    }
-});
-
-
-// Evento 'pause'
-videoPlayer.addEventListener('pause', () => {
-    console.log('[Player] Pause');
-    if (!viewStarted) return; // Não faz nada se a sessão não começou
-
-    updateWatchDuration(); // Calcula duração do último segmento tocado
-    isPlaying = false;
-    clearInterval(heartbeatInterval); // Para heartbeat
-    if (videoPlayer.duration > 0) {
-         sendTrackingData('pause', {
-            duration: watchDuration,
-            progress: videoPlayer.currentTime / videoPlayer.duration
-         });
-    }
-});
-
-// Evento 'ended' (vídeo chegou ao fim)
-videoPlayer.addEventListener('ended', () => {
-    console.log('[Player] Ended');
-    if (!viewStarted) return;
-
-    updateWatchDuration(); // Calcula último segmento
-    isPlaying = false;
-    clearInterval(heartbeatInterval);
-    sendTrackingData('complete', {
-        duration: watchDuration,
-        completed: true
     });
-});
 
-// Evento 'seeked' (usuário pulou no vídeo)
-videoPlayer.addEventListener('seeked', () => {
-    console.log(`[Player] Seeked to ${videoPlayer.currentTime.toFixed(2)}s`);
-    if (!viewStarted) return;
-    // Reinicia startTime se estava tocando, para calcular corretamente a duração após o seek
-    if (isPlaying) {
-        startTime = new Date();
-    }
-    // Pode-se enviar um evento de seek se for relevante para as estatísticas
-});
+    videoPlayer.addEventListener('playing', () => {
+        console.log('[Player] Playing (após buffer/seek)');
+        if (!isPlaying) {
+            isPlaying = true;
+            startTime = new Date();
+            if (!viewStarted) startTrackingSession();
+            startHeartbeat();
+        }
+    });
 
 
-// --- Tracking de Saída da Página ---
-window.addEventListener('beforeunload', () => {
-    console.log('[Tracking] Usuário saindo da página...');
-    if (!viewStarted) return; // Se não começou a ver, não envia 'exit'
+    videoPlayer.addEventListener('pause', () => {
+        console.log('[Player] Pause');
+        if (!viewStarted) return;
+        updateWatchDuration();
+        isPlaying = false;
+        clearInterval(heartbeatInterval);
+        if (videoPlayer.duration > 0) {
+             sendTrackingData('pause', {
+                duration: watchDuration,
+                progress: videoPlayer.currentTime / videoPlayer.duration
+             });
+        }
+    });
 
-    updateWatchDuration(); // Calcula o último pedaço assistido
-    clearInterval(heartbeatInterval);
-
-    // Usar sendBeacon é preferível pois funciona mesmo com a página fechando
-    // O backend precisa ser capaz de receber 'application/json' ou 'text/plain'
-    if (navigator.sendBeacon) {
-         const data = JSON.stringify({
-            sessionId,
+    videoPlayer.addEventListener('ended', () => {
+        console.log('[Player] Ended');
+        if (!viewStarted) return;
+        updateWatchDuration();
+        isPlaying = false;
+        clearInterval(heartbeatInterval);
+        sendTrackingData('complete', {
             duration: watchDuration,
-            progress: (videoPlayer && videoPlayer.duration > 0) ? videoPlayer.currentTime / videoPlayer.duration : 0
-         });
-         try {
-           const sent = navigator.sendBeacon('/track/exit', new Blob([data], { type: 'application/json' }));
-           console.log(`[Tracking] sendBeacon para 'exit' ${sent ? 'enfileirado' : 'falhou'}.`);
-         } catch (e) {
-             console.error("[Tracking] Erro ao usar sendBeacon:", e);
-             // Fallback para fetch síncrono pode não funcionar, mas tentamos
-             sendTrackingData('exit', { duration: watchDuration, progress: videoPlayer.currentTime / videoPlayer.duration });
-         }
+            completed: true
+        });
+    });
+
+    videoPlayer.addEventListener('seeked', () => {
+        console.log(`[Player] Seeked to ${videoPlayer.currentTime.toFixed(2)}s`);
+        if (!viewStarted) return;
+        if (isPlaying) {
+            startTime = new Date();
+        }
+    });
+
+    // --- Tracking de Saída da Página ---
+    window.addEventListener('beforeunload', () => {
+        console.log('[Tracking] Usuário saindo da página...');
+        if (!viewStarted) return;
+        updateWatchDuration();
+        clearInterval(heartbeatInterval);
+
+        if (navigator.sendBeacon) {
+             const data = JSON.stringify({
+                sessionId,
+                duration: watchDuration,
+                progress: (videoPlayer && videoPlayer.duration > 0) ? videoPlayer.currentTime / videoPlayer.duration : 0
+             });
+             const exitUrl = `${BACKEND_URL}/track/exit`; // <-- Usa URL absoluta
+             try {
+               const sent = navigator.sendBeacon(exitUrl, new Blob([data], { type: 'application/json' }));
+               console.log(`[Tracking] sendBeacon para 'exit' (${exitUrl}) ${sent ? 'enfileirado' : 'falhou'}.`);
+             } catch (e) {
+                 console.error("[Tracking] Erro ao usar sendBeacon:", e);
+                 // Fallback para fetch síncrono (menos confiável)
+                 sendTrackingData('exit', { duration: watchDuration, progress: videoPlayer.currentTime / videoPlayer.duration });
+             }
+        } else {
+            // Fallback para fetch (menos confiável no unload)
+            sendTrackingData('exit', { duration: watchDuration, progress: videoPlayer.currentTime / videoPlayer.duration });
+        }
+    });
+
+    // --- Definir origem do vídeo usando URL absoluta ---
+    const videoSourceElement = videoPlayer.querySelector('source');
+    if (videoSourceElement) {
+        const videoUrl = `${BACKEND_URL}/video`; // <-- Usa URL absoluta para o vídeo
+        videoSourceElement.src = videoUrl;
+        videoPlayer.load(); // Recarrega a origem do vídeo
+        console.log(`[Frontend] Origem do vídeo definida para: ${videoUrl}`);
     } else {
-        // Fallback para fetch (menos confiável no unload)
-        sendTrackingData('exit', { duration: watchDuration, progress: videoPlayer.currentTime / videoPlayer.duration });
+         console.error('[Frontend] Elemento <source> não encontrado dentro do <video>.');
     }
-});
+
+} else {
+     console.error('[Frontend] Elemento <video> não encontrado.');
+}
 
 // --- Inicialização ---
-// A sessão de tracking começa quando o usuário dá o primeiro 'play'.
-// Autoplay pode ser bloqueado, então confiar no evento 'play' é mais robusto.
 console.log('[Frontend] Event listeners configurados.');
-

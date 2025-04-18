@@ -23,14 +23,15 @@
         </div>
 
         <div class="message-box">
-            <!-- Placeholder: Mensagem será injetada aqui pelo backend ao servir este HTML -->
-            <p>__CUSTOM_MESSAGE__</p>
+            <!-- Placeholder removido ou definido para padrão se necessário -->
+            <p>Carregando vídeo...</p> <!-- Mensagem padrão -->
         </div>
 
         <div class="video-container">
+            <!-- src será definido por JS, type pode não ser estritamente necessário se o backend enviar Content-Type correto -->
             <video id="videoPlayer" controls playsinline preload="metadata"> <!-- preload=metadata carrega dimensões etc. -->
-                <!-- Placeholder: O tipo será injetado pelo backend -->
-                <source src="/video" type="__VIDEO_MIME_TYPE__">
+                <!-- src deixado vazio, type é um fallback -->
+                <source src="" type="video/mp4">
                 Seu navegador não suporta a tag de vídeo HTML5.
             </video>
              <div id="errorMessage" class="error-message" style="display: none;"></div>
