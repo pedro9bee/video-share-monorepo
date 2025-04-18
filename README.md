@@ -33,7 +33,7 @@ git add .
 git commit -m "feat: workspaces"
 
 # Crie a nova tag
-git tag -a v1.0.0 -m "Multiple Workspaces"
+git tag -a v1.0.1 -m "Backend to Typescript"
 
 # Envie a tag para o repositório remoto
 git push origin v1.0.0
