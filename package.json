@@ -7,13 +7,15 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "npm run build -w frontend",
-    "start:backend": "npm run start -w backend",
-    "dev:frontend": "npm run dev -w frontend",
+    "build": "npm run build -w video-share-frontend",
+    "start:backend": "npm run start -w video-share-backend",
+    "dev:frontend": "npm run dev -w video-share-frontend",
     "dev": "concurrently \"npm:dev:frontend\" \"npm:start:backend\"",
-    "install:all": "npm install"
+    "install:all": "npm install",
+    "start": "npm run start:backend:prod" 
   },
   "devDependencies": {
-    "concurrently": "^7.0.0"
+    "concurrently": "^7.0.0",
+    "cross-env": "^7.0.3"
   }
 }
