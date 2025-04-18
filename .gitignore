@@ -1,0 +1,32 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Build artifacts
+packages/frontend/dist/
+packages/backend/public/
+
+# Logs and Stats
+**/stats/
+*.log
+video_server*.log
+debug_log.txt
+
+# Cloudflare temp files
+.cloudflared/
+*.pem
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# Env files
+.env*
+!/.env.example
+!/packages/backend/.env.example
+
+# Video files (optional, but recommended)
+*.mp4
+*.webm
+*.mov
+*.avi

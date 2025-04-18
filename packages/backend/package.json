@@ -1,0 +1,19 @@
+{
+  "name": "video-share-backend",
+  "version": "1.0.0",
+  "description": "Backend server for video sharing",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.0.0",
+    "express": "^4.18.2",
+    "mime-types": "^2.1.35",
+    "qrcode-terminal": "^0.12.0"
+  },
+  "devDependencies": {
+    "nodemon": "^2.0.15"
+  }
+}

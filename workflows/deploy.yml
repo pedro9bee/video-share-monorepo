@@ -1,0 +1,95 @@
+name: Build Video Share App
+
+on:
+  push:
+    branches: [ main ] # Gatilho ao fazer push na main
+  workflow_dispatch:   # Gatilho manual
+
+jobs:
+  build-and-test: # Nome do job mais descritivo
+    runs-on: ubuntu-latest
+    timeout-minutes: 10 # Definir um timeout
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4 # Usar versão mais recente
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4 # Usar versão mais recente
+      with:
+        node-version: '18.x' # Especificar versão LTS, usar .x para patch mais recente
+        cache: 'npm'      # Habilita cache de dependências npm
+
+    - name: Install dependencies (root and workspaces)
+      run: npm install # npm 7+ instala workspaces automaticamente com 'npm install' na raiz
+
+    - name: Build Frontend for Production
+      run: npm run build -w frontend # O -w especifica o workspace
+      env:
+        NODE_ENV: production # Garante que Rollup use config de produção
+
+    # Opcional: Linting e Testes (se configurados)
+    # - name: Lint code (example)
+    #   run: npm run lint --if-present # Roda se o script 'lint' existir
+
+    # - name: Run tests (example)
+    #   run: npm run test --if-present # Roda se o script 'test' existir
+
+    - name: Verify build artifacts
+      run: |
+        echo "Verifying backend public directory contents:"
+        ls -alh packages/backend/public
+        echo "Checking for bundle.js and bundle.css..."
+        test -f packages/backend/public/bundle.js && echo "bundle.js found." || (echo "bundle.js NOT found!" && exit 1)
+        test -f packages/backend/public/bundle.css && echo "bundle.css found." || (echo "bundle.css NOT found!" && exit 1)
+
+    - name: Archive production artifacts for deployment
+      uses: actions/upload-artifact@v4 # Usar versão mais recente
+      with:
+        name: video-share-app-build # Nome do artefato
+        path: |
+          packages/backend/src/
+          packages/backend/public/
+          packages/backend/stats/ # Incluir se quiser manter stats entre deploys (cuidado)
+          packages/backend/package.json
+          packages/backend/package-lock.json # Importante para instalações consistentes
+          # Não incluir node_modules
+        retention-days: 7 # Reter artefatos por 7 dias
+
+  # --- Job de Deploy (Exemplo - separar build de deploy é boa prática) ---
+  # deploy:
+  #   needs: build-and-test # Depende do job de build
+  #   runs-on: ubuntu-latest
+  #   if: github.ref == 'refs/heads/main' # Rodar deploy somente na branch main
+  #
+  #   steps:
+  #   - name: Download build artifact
+  #     uses: actions/download-artifact@v4
+  #     with:
+  #       name: video-share-app-build
+  #       path: ./deploy # Baixa para uma pasta temporária
+  #
+  #   - name: Deploy to Production (Example: SCP to server)
+  #     uses: appleboy/scp-action@master # Exemplo de action para copiar arquivos
+  #     with:
+  #       host: ${{ secrets.PROD_SERVER_HOST }}
+  #       username: ${{ secrets.PROD_SERVER_USERNAME }}
+  #       key: ${{ secrets.PROD_SSH_PRIVATE_KEY }}
+  #       source: "./deploy/*" # Copia todo o conteúdo baixado
+  #       target: "/var/www/video-share-app" # Diretório de destino no servidor
+  #       strip_components: 1 # Remove o diretório 'deploy/' ao copiar
+  #
+  #   - name: Setup and Restart Server (Example: SSH commands)
+  #     uses: appleboy/ssh-action@master # Exemplo de action para rodar comandos SSH
+  #     with:
+  #       host: ${{ secrets.PROD_SERVER_HOST }}
+  #       username: ${{ secrets.PROD_SERVER_USERNAME }}
+  #       key: ${{ secrets.PROD_SSH_PRIVATE_KEY }}
+  #       script: |
+  #         cd /var/www/video-share-app
+  #         npm install --production # Instala somente dependências de produção
+  #         # Configurar variáveis de ambiente (VIDEO_PATH etc.) aqui ou via segredos/serviço
+  #         # Exemplo: export VIDEO_PATH=${{ secrets.VIDEO_PATH_ON_SERVER }}
+  #         # Reiniciar aplicação (exemplo com PM2)
+  #         pm2 reload video-share-backend || pm2 start src/server.js --name video-share-backend
+  #         # Configurar e garantir que cloudflared esteja rodando como serviço (systemd, etc.)

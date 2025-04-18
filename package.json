@@ -1,0 +1,19 @@
+{
+  "name": "video-share-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Monorepo for enhanced video sharing application",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build -w frontend",
+    "start:backend": "npm run start -w backend",
+    "dev:frontend": "npm run dev -w frontend",
+    "dev": "concurrently \"npm:dev:frontend\" \"npm:start:backend\"",
+    "install:all": "npm install"
+  },
+  "devDependencies": {
+    "concurrently": "^7.0.0"
+  }
+}
