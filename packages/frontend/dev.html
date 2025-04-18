@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Share MFE (Dev)</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; background-color: #eee; line-height: 1.6; }
+        video-share {
+            display: block;
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 20px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            border: 2px solid cornflowerblue;
+        }
+        h1, h2 { text-align: center; color: #333;}
+        .info { margin-top: 30px; padding: 15px; background-color: #f9f9f9; border-radius: 5px; border: 1px solid #ddd; }
+        #app {
+             max-width: 800px; margin: 20px auto; padding: 20px; background: white; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); border: 2px solid lightcoral;
+        }
+    </style>
+</head>
+<body>
+    <h1>Testing <code><video-share></code> MFE</h1>
+
+    <video-share
+        message="Olá do Custom Element!"
+        video-src="/video">  <!-- Use o path relativo, o proxy cuida disso -->
+         <p>Carregando MFE via Custom Element...</p>
+    </video-share>
+
+    <hr style="margin: 40px 0;">
+
+    <h2>Development Direct Render (Vite HMR)</h2>
+    <p style="text-align: center;">Abaixo, o componente App é renderizado diretamente no #app (ignora o custom element).</p>
+    <div id="app">
+        <!-- App Preact será renderizado aqui em dev via main.tsx -->
+    </div>
+
+    <div class="info">
+      <h2>Notas:</h2>
+      <ul>
+          <li>O elemento superior (borda azul) usa a tag <code><video-share></code> real.</li>
+          <li>O elemento inferior (borda vermelha) mostra o App Preact renderizado diretamente via <code>main.tsx</code> (apenas em dev).</li>
+          <li>Verifique o console do navegador para logs.</li>
+          <li>Requisições para <code>/video</code> e <code>/track</code> devem ser direcionadas para o backend via proxy.</li>
+      </ul>
+    </div>
+
+    <!-- Carrega o ponto de entrada do MFE (Vite gerencia isso em dev) -->
+    <script type="module" src="/src/main.tsx"></script>
+</body>
+</html>

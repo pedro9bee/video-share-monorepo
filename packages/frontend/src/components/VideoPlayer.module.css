@@ -1,0 +1,16 @@
+/* Estilos especificos para o elemento video dentro do componente VideoPlayer */
+.videoElement {
+    display: block; /* Remove espaço extra abaixo */
+    width: 100%; /* Ocupa largura total do container pai */
+    max-width: 100%;
+    height: auto; /* Mantém a proporção */
+    border-radius: 8px; /* Bordas arredondadas */
+    background-color: #000; /* Fundo preto para área do vídeo */
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1); /* Sombra leve */
+    outline: none; /* Remove outline padrão ao focar */
+    /* Garante que os controles nativos sejam visíveis sobre o fundo preto */
+    color-scheme: light dark; /* Ajuda na adaptação dos controles ao tema */
+}
+
+/* Opcional: Estilizar controles (pode variar entre navegadores) */
+/* .videoElement::-webkit-media-controls-panel { ... } */

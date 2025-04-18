@@ -1,0 +1,2107 @@
+>>>>>>>.github/workflows/deploy.yml
+name: Build Video Share App
+
+on:
+  push:
+    branches: [ main ] # Gatilho ao fazer push na main
+  workflow_dispatch:   # Gatilho manual
+
+jobs:
+  build-and-test: # Nome do job mais descritivo
+    runs-on: ubuntu-latest
+    timeout-minutes: 10 # Definir um timeout
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4 # Usar versão mais recente
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4 # Usar versão mais recente
+      with:
+        node-version: '18.x' # Especificar versão LTS, usar .x para patch mais recente
+        cache: 'npm'      # Habilita cache de dependências npm
+
+    - name: Install dependencies (root and workspaces)
+      run: npm install # npm 7+ instala workspaces automaticamente com 'npm install' na raiz
+
+    - name: Build Frontend for Production
+      run: npm run build -w frontend # O -w especifica o workspace
+      env:
+        NODE_ENV: production # Garante que Rollup use config de produção
+
+    # Opcional: Linting e Testes (se configurados)
+    # - name: Lint code (example)
+    #   run: npm run lint --if-present # Roda se o script 'lint' existir
+
+    # - name: Run tests (example)
+    #   run: npm run test --if-present # Roda se o script 'test' existir
+
+    - name: Verify build artifacts
+      run: |
+        echo "Verifying backend public directory contents:"
+        ls -alh packages/backend/public
+        echo "Checking for bundle.js and bundle.css..."
+        test -f packages/backend/public/bundle.js && echo "bundle.js found." || (echo "bundle.js NOT found!" && exit 1)
+        test -f packages/backend/public/bundle.css && echo "bundle.css found." || (echo "bundle.css NOT found!" && exit 1)
+
+    - name: Archive production artifacts for deployment
+      uses: actions/upload-artifact@v4 # Usar versão mais recente
+      with:
+        name: video-share-app-build # Nome do artefato
+        path: |
+          packages/backend/src/
+          packages/backend/public/
+          packages/backend/stats/ # Incluir se quiser manter stats entre deploys (cuidado)
+          packages/backend/package.json
+          packages/backend/package-lock.json # Importante para instalações consistentes
+          # Não incluir node_modules
+        retention-days: 7 # Reter artefatos por 7 dias
+
+  # --- Job de Deploy (Exemplo - separar build de deploy é boa prática) ---
+  # deploy:
+  #   needs: build-and-test # Depende do job de build
+  #   runs-on: ubuntu-latest
+  #   if: github.ref == 'refs/heads/main' # Rodar deploy somente na branch main
+  #
+  #   steps:
+  #   - name: Download build artifact
+  #     uses: actions/download-artifact@v4
+  #     with:
+  #       name: video-share-app-build
+  #       path: ./deploy # Baixa para uma pasta temporária
+  #
+  #   - name: Deploy to Production (Example: SCP to server)
+  #     uses: appleboy/scp-action@master # Exemplo de action para copiar arquivos
+  #     with:
+  #       host: ${{ secrets.PROD_SERVER_HOST }}
+  #       username: ${{ secrets.PROD_SERVER_USERNAME }}
+  #       key: ${{ secrets.PROD_SSH_PRIVATE_KEY }}
+  #       source: "./deploy/*" # Copia todo o conteúdo baixado
+  #       target: "/var/www/video-share-app" # Diretório de destino no servidor
+  #       strip_components: 1 # Remove o diretório 'deploy/' ao copiar
+  #
+  #   - name: Setup and Restart Server (Example: SSH commands)
+  #     uses: appleboy/ssh-action@master # Exemplo de action para rodar comandos SSH
+  #     with:
+  #       host: ${{ secrets.PROD_SERVER_HOST }}
+  #       username: ${{ secrets.PROD_SERVER_USERNAME }}
+  #       key: ${{ secrets.PROD_SSH_PRIVATE_KEY }}
+  #       script: |
+  #         cd /var/www/video-share-app
+  #         npm install --production # Instala somente dependências de produção
+  #         # Configurar variáveis de ambiente (VIDEO_PATH etc.) aqui ou via segredos/serviço
+  #         # Exemplo: export VIDEO_PATH=${{ secrets.VIDEO_PATH_ON_SERVER }}
+  #         # Reiniciar aplicação (exemplo com PM2)
+  #         pm2 reload video-share-backend || pm2 start src/server.js --name video-share-backend
+  #         # Configurar e garantir que cloudflared esteja rodando como serviço (systemd, etc.)
+
+>>>>>>>.gitignore
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Build artifacts
+packages/frontend/dist/
+packages/backend/public/
+packages/backend/dist/
+
+# Logs and Stats
+**/stats/
+*.log
+video_server*.log
+debug_log.txt
+
+# Cloudflare temp files
+.cloudflared/
+*.pem
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# Env files
+.env*
+!/.env.example
+!/packages/backend/.env.example
+
+# Video files (optional, but recommended)
+*.mp4
+*.webm
+*.mov
+*.avi
+
+>>>>>>>README.md
+# Video Share Monorepo
+
+Monorepo para a aplicação de compartilhamento de vídeos com frontend e backend separados.
+
+## Estrutura
+
+- `packages/backend`: Servidor Express, gerenciamento do Cloudflare Tunnel, API de tracking.
+- `packages/frontend`: Interface do usuário com player de vídeo, construída com Rollup.
+- `.github/workflows`: CI/CD (exemplo).
+
+## Como Usar (Localmente)
+
+1.  **Instalar Dependências:**
+    ```bash
+    npm install
+    ```
+2.  **Configurar Backend:** Crie um arquivo `.env` em `packages/backend/.env` com as variáveis (veja `packages/backend/.env.example`).
+3.  **Construir Frontend:**
+    ```bash
+    npm run build
+    ```
+4.  **Iniciar Backend (com Cloudflare):**
+    ```bash
+    npm run start:backend
+    ```
+5.  **Desenvolvimento (Frontend + Backend com Watch):**
+    ```bash
+    npm run dev
+    ```
+
+# Garanta que tudo está commitado
+git add .
+git commit -m "feat: workspaces"
+
+# Crie a nova tag
+git tag -a v1.0.1 -m "Backend to Typescript"
+
+# Envie a tag para o repositório remoto
+git push origin v1.0.1
+
+>>>>>>>package.json
+{
+  "name": "video-share-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Monorepo for enhanced video sharing application",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build -w video-share-backend && npm run build -w video-share-mfe",
+    "start": "npm run start -w video-share-backend",
+    "start:backend": "npm run start -w video-share-backend",
+    "dev:frontend": "npm run dev -w video-share-mfe",
+    "dev:backend": "cross-env NODE_ENV=development npm run dev -w video-share-backend",
+    "dev": "concurrently \"npm:dev:frontend\" \"npm:dev:backend\""
+  },
+  "devDependencies": {
+    "concurrently": "^7.0.0",
+    "cross-env": "^7.0.3"
+  },
+  "dependencies": {
+    "@rollup/plugin-replace": "^6.0.2"
+  }
+}
+
+>>>>>>>packages/backend/.env.example
+# Caminho absoluto para o arquivo de vídeo
+VIDEO_PATH=/Users/pedrofernandes/repositories/apps/video-share/videos/1.mp4
+
+# Mensagem personalizada a ser exibida na página
+CUSTOM_MESSAGE="Um vídeo especial para você!"
+
+# Porta para o servidor backend (padrão 3000)
+PORT=3000
+
+# Ambiente (development ou production)
+NODE_ENV=development
+
+>>>>>>>packages/backend/package.json
+{
+  "name": "video-share-backend",
+  "version": "1.0.0",
+  "description": "Backend server for video sharing",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "cross-env NODE_ENV=production node dist/index.js",
+    "dev": "ts-node-dev --respawn --transpile-only --ignore-watch node_modules --no-notify src/index.ts",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.0.0",
+    "express": "^4.18.2",
+    "mime-types": "^2.1.35",
+    "qrcode-terminal": "^0.12.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/dotenv": "^8.2.0",
+    "@types/express": "^4.17.13",
+    "@types/mime-types": "^2.1.1",
+    "@types/node": "^18.0.0",
+    "@types/qrcode-terminal": "^0.12.0",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.3.3" 
+  }
+}
+
+>>>>>>>packages/backend/src/app.ts
+// packages/backend/src/app.ts
+import express, { Express, Request, Response, NextFunction } from 'express';
+import cors from 'cors'; // <-- Importar cors
+import config from './config';
+import mainRouter from './routes';
+import { logDebug, logError, logInfo } from './utils/logger';
+import fs from 'fs';
+import path from 'path';
+
+const app: Express = express();
+
+// --- Middlewares Essenciais ---
+app.use(express.json());
+app.use((req: Request, res: Response, next: NextFunction) => {
+    logDebug(`Request: ${req.method} ${req.originalUrl} from ${req.ip}`);
+    res.on('finish', () => {
+        logDebug(`Response: ${req.method} ${req.originalUrl} ${res.statusCode}`);
+    });
+    next();
+});
+
+// --- CORS Middleware (APENAS em DEV) ---
+if (config.IS_DEV) {
+  const corsOptions = {
+    // Permite requisições SOMENTE da origem do servidor de dev do frontend
+    origin: 'http://localhost:8080',
+    optionsSuccessStatus: 200 // Necessário para alguns navegadores legados ou proxies
+  };
+  app.use(cors(corsOptions)); // <-- Usar o middleware cors com as opções
+  logInfo(`[INFO] CORS habilitado para origem: ${corsOptions.origin}`);
+}
+
+// --- Montar Rotas da API ---
+// Deve vir DEPOIS do middleware CORS
+app.use(mainRouter); // Lida com /video, /track, /stats etc.
+
+// --- Servir Arquivos Estáticos APENAS EM PRODUÇÃO ---
+if (config.IS_PROD) {
+    logInfo(`[INFO] Modo Produção: Configurando express.static para servir de: ${config.FRONTEND_BUILD_PATH_PROD}`);
+    if (fs.existsSync(config.FRONTEND_BUILD_PATH_PROD)) {
+        app.use(express.static(config.FRONTEND_BUILD_PATH_PROD));
+        // Fallback para SPAs (opcional, mas útil)
+        app.get('*', (req, res) => {
+           logDebug(`[SPA Fallback] Servindo index.html para ${req.originalUrl}`);
+           res.sendFile(path.resolve(config.FRONTEND_BUILD_PATH_PROD, 'index.html'));
+        });
+    } else {
+        logError(`[ERRO] Modo Produção: Diretório de build do frontend NÃO encontrado em ${config.FRONTEND_BUILD_PATH_PROD}`);
+        app.use('*', (req, res) => {
+            res.status(503).send('Erro: Aplicação frontend não encontrada. Contate o administrador.');
+        });
+    }
+} else {
+    logInfo("[INFO] Modo Desenvolvimento: O backend NÃO servirá arquivos estáticos do frontend. Use o servidor de desenvolvimento do frontend (Rollup serve em :8080).");
+}
+
+// --- Tratamento de Rota Não Encontrada (404) ---
+app.use((req: Request, res: Response, next: NextFunction) => {
+    logError(`[404 Handler] Rota da API não encontrada ou recurso inválido: ${req.method} ${req.originalUrl}`);
+    res.status(404).json({ message: `Rota não encontrada ou inválida: ${req.originalUrl}` });
+});
+
+// --- Tratamento de Erro Genérico ---
+app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
+  logError('Erro de API não tratado:', err.stack || err.message);
+  res.status(500).json({ message: 'Erro interno do servidor (API)' });
+});
+
+export default app;
+>>>>>>>packages/backend/src/config/index.ts
+// packages/backend/src/config/index.ts
+import dotenv from 'dotenv';
+import path from 'path';
+import fs from 'fs';
+
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+
+interface ENV {
+  NODE_ENV: string;
+  PORT: number;
+  VIDEO_PATH: string;
+  CUSTOM_MESSAGE: string;
+}
+
+interface Config {
+  NODE_ENV: string;
+  PORT: number;
+  VIDEO_PATH: string;
+  CUSTOM_MESSAGE: string;
+  IS_DEV: boolean;
+  IS_PROD: boolean;
+  // FRONTEND_DIST_PATH agora é relevante apenas para builds de produção
+  FRONTEND_BUILD_PATH_PROD: string; // Renomeado para clareza
+}
+
+const getSanitizedEnv = (): ENV => {
+  const port = parseInt(process.env.PORT || '3000', 10);
+  if (isNaN(port)) {
+    console.error('❌ Erro: PORT inválido no .env');
+    process.exit(1);
+  }
+
+  const videoPath = process.env.VIDEO_PATH;
+  if (!videoPath) {
+    console.error('❌ Erro: VIDEO_PATH não definido no .env');
+    process.exit(1);
+  }
+
+  return {
+    NODE_ENV: process.env.NODE_ENV || 'production',
+    PORT: port,
+    VIDEO_PATH: videoPath,
+    CUSTOM_MESSAGE: process.env.CUSTOM_MESSAGE || 'Um vídeo especial para você!',
+  };
+};
+
+const ENV = getSanitizedEnv();
+const IS_DEV = ENV.NODE_ENV === 'development';
+
+const config: Config = {
+  ...ENV,
+  IS_DEV,
+  IS_PROD: !IS_DEV,
+  // Caminho onde os artefatos de build de PRODUÇÃO do frontend estarão
+  FRONTEND_BUILD_PATH_PROD: path.resolve(__dirname, '../../public'),
+};
+
+// --- Validar VIDEO_PATH ---
+if (!fs.existsSync(config.VIDEO_PATH)) {
+    console.error(`❌ Erro: Arquivo de vídeo não encontrado em "${config.VIDEO_PATH}" (definido no .env)`);
+    process.exit(1);
+}
+
+// --- Nenhuma validação de caminho do frontend necessária aqui para dev ---
+
+export default config;
+>>>>>>>packages/backend/src/index.ts
+// packages/backend/src/index.ts
+import http from 'http';
+import app from './app'; // Importa a instância configurada do Express
+import config from './config';
+import { StatsService } from './services/stats.service';
+import { CloudflareService } from './services/cloudflare.service';
+import { logInfo, logError, logDebug } from './utils/logger';
+import { registerGracefulShutdown } from './utils/shutdown';
+import path from 'path'; // Import path aqui, pois é usado
+
+let serverInstance: http.Server | null = null;
+
+const start = async () => {
+  logInfo('Iniciando aplicação...');
+
+  // Carregar estatísticas iniciais
+  StatsService.loadStats();
+
+  // Criar e iniciar o servidor HTTP
+  serverInstance = http.createServer(app);
+
+  serverInstance.listen(config.PORT, () => {
+    logInfo(`\n🚀 Servidor Backend iniciado em http://localhost:${config.PORT}`);
+    logInfo(`📹 Compartilhando: ${path.basename(config.VIDEO_PATH)}`); // Usa path.basename
+
+    // Logar o diretório do frontend SOMENTE em produção
+    if (config.IS_PROD) {
+      logInfo(`[INFO] Servindo frontend (produção) de: ${config.FRONTEND_BUILD_PATH_PROD}`); // <--- NOME CORRETO AQUI
+    } else {
+       logInfo(`[INFO] Modo desenvolvimento: Frontend servido por Rollup em :8080`);
+    }
+
+
+    logInfo(''); // Linha em branco para espaçamento
+    logInfo('⏳ Iniciando túnel Cloudflare...'); // Movido para depois dos logs iniciais
+
+    // Iniciar Cloudflare Tunnel APÓS o servidor estar ouvindo
+    CloudflareService.startTunnel(config.PORT);
+  });
+
+  // Registrar manipuladores de encerramento gracioso
+  registerGracefulShutdown(serverInstance);
+
+  // Lidar com erros do servidor (ex: porta já em uso)
+  serverInstance.on('error', (error: NodeJS.ErrnoException) => {
+    if (error.syscall !== 'listen') throw error;
+    switch (error.code) {
+      case 'EACCES':
+        logError(`❌ Erro: Porta ${config.PORT} requer privilégios elevados.`);
+        process.exit(1);
+        break;
+      case 'EADDRINUSE':
+        logError(`❌ Erro: Porta ${config.PORT} já está em uso.`);
+        process.exit(1);
+        break;
+      default:
+        throw error;
+    }
+  });
+
+  // Opcional: Ouvir eventos do túnel
+  CloudflareService.emitter.on('ready', (url: string) => {
+    logInfo(`✅ Túnel Cloudflare pronto: ${url}`);
+  });
+  CloudflareService.emitter.on('error', (err: Error) => {
+    logError(`❌ Erro no túnel Cloudflare: ${err.message}`);
+    // process.exit(1); // Considerar sair em caso de erro no túnel
+  });
+   CloudflareService.emitter.on('close', () => {
+    logInfo(`ℹ️ Túnel Cloudflare foi fechado.`);
+  });
+};
+
+// Não precisa importar path novamente aqui, já foi importado acima
+
+// Executar a função de inicialização
+start().catch(error => {
+    logError("Erro fatal durante a inicialização:", error);
+    process.exit(1);
+});
+>>>>>>>packages/backend/src/routes/index.ts
+// packages/backend/src/routes/index.ts
+import { Router } from 'express';
+import trackingRouter from './tracking.routes';
+import statsRouter from './stats.routes';
+import videoRouter from './video.routes';
+// NÃO importe pageRouter aqui se ele não define rotas de API
+
+const mainRouter = Router();
+
+// Monta os roteadores específicos da API
+mainRouter.use('/video', videoRouter);     // Rota específica para o vídeo
+mainRouter.use('/track', trackingRouter);  // Rotas de tracking
+mainRouter.use('/stats', statsRouter);    // Rotas de estatísticas
+// A rota '/' NÃO é mais tratada aqui
+
+export default mainRouter;
+>>>>>>>packages/backend/src/routes/stats.routes.ts
+import { Router, Request, Response } from 'express';
+import { StatsService } from '../services/stats.service';
+
+const router = Router();
+
+router.get('/', (req: Request, res: Response) => {
+  const summary = StatsService.getStatsSummary();
+  res.json(summary);
+});
+
+// Opcional: Rota para obter detalhes completos (proteger se necessário)
+// router.get('/details', (req: Request, res: Response) => {
+//   const fullStats = StatsService.getRawStats(); // Cuidado ao expor tudo
+//   res.json(fullStats);
+// });
+
+export default router;
+>>>>>>>packages/backend/src/routes/tracking.routes.ts
+import { Router, Request, Response } from 'express';
+import { StatsService } from '../services/stats.service';
+import { logError } from '../utils/logger';
+
+const router = Router();
+
+// Validação básica do corpo da requisição
+const validateTrackingBody = (body: any): boolean => {
+  return body && typeof body.sessionId === 'string';
+};
+
+router.post('/start', (req: Request, res: Response) => {
+  const { sessionId, userAgent, language, screenSize, timestamp } = req.body;
+  if (!sessionId) return res.status(400).send('Missing sessionId');
+
+  // Os dados adicionais são opcionais
+  StatsService.startSession(sessionId, {
+    userAgent,
+    language,
+    screenSize,
+    timestamp, // Passa o timestamp do cliente, se houver
+    ip: req.ip,
+  });
+  res.sendStatus(200);
+});
+
+router.post('/heartbeat', (req: Request, res: Response) => {
+  if (!validateTrackingBody(req.body)) return res.status(400).send('Invalid body');
+  const { sessionId, duration, progress } = req.body;
+  StatsService.updateSession(sessionId, duration, progress);
+  res.sendStatus(200);
+});
+
+router.post('/pause', (req: Request, res: Response) => {
+  if (!validateTrackingBody(req.body)) return res.status(400).send('Invalid body');
+  const { sessionId, duration, progress } = req.body;
+  StatsService.updateSession(sessionId, duration, progress);
+  res.sendStatus(200);
+});
+
+router.post('/complete', (req: Request, res: Response) => {
+  if (!validateTrackingBody(req.body)) return res.status(400).send('Invalid body');
+  const { sessionId, duration } = req.body;
+  StatsService.finalizeSession(sessionId, duration, 1.0, true);
+  res.sendStatus(200);
+});
+
+router.post('/exit', (req: Request, res: Response) => {
+  // sendBeacon pode não ter Content-Type correto, mas express.json deve tratar
+   try {
+      if (!validateTrackingBody(req.body)) return res.status(400).send('Invalid body or missing sessionId');
+      const { sessionId, duration, progress } = req.body;
+      StatsService.finalizeSession(sessionId, duration, progress, false);
+      res.sendStatus(200);
+   } catch (e) {
+      logError("Erro ao processar track/exit:", e, "Body:", req.body);
+      res.status(400).send("Invalid request body");
+   }
+});
+
+router.post('/error', (req: Request, res: Response) => {
+  // Não requer sessionId obrigatório, mas é útil
+  const { sessionId, errorCode, errorMessage } = req.body;
+  logError(`\n‼️ Erro no Player (Sessão: ${sessionId ? sessionId.substring(0,8) : 'N/A'}...): Code ${errorCode || 'N/A'}, ${errorMessage || 'N/A'}`);
+  // Poderia salvar esse erro nas estatísticas se desejado
+  res.sendStatus(200);
+});
+
+
+export default router;
+>>>>>>>packages/backend/src/routes/video.routes.ts
+import { Router, Request, Response } from 'express';
+import config from '../config';
+import fs from 'fs';
+import mime from 'mime-types';
+import { logDebug, logError } from '../utils/logger';
+
+const router = Router();
+
+// Rota para servir o vídeo
+router.get('/', (req: Request, res: Response) => {
+    logDebug('Requisição de vídeo recebida', { ip: req.ip, range: req.headers.range });
+    const videoPath = config.VIDEO_PATH; // Pega do config
+
+    try {
+        if (!fs.existsSync(videoPath)) {
+            logError(`Erro crítico: VIDEO_PATH (${videoPath}) não existe.`);
+            return res.status(404).send("Arquivo de vídeo não encontrado no servidor.");
+        }
+        const stat = fs.statSync(videoPath);
+        const fileSize = stat.size;
+        const range = req.headers.range;
+        const mimeType = mime.lookup(videoPath) || 'video/mp4'; // Default mime type
+
+        if (range) {
+            const parts = range.replace(/bytes=/, "").split("-");
+            const start = parseInt(parts[0], 10);
+            const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+
+            if (start >= fileSize || end >= fileSize || start < 0 || start > end) {
+                res.status(416).send('Range Not Satisfiable');
+                return;
+            }
+
+            const chunksize = (end - start) + 1;
+            const file = fs.createReadStream(videoPath, { start, end });
+            const head = {
+                'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+                'Accept-Ranges': 'bytes',
+                'Content-Length': chunksize,
+                'Content-Type': mimeType,
+            };
+            res.writeHead(206, head); // Partial Content
+            file.pipe(res);
+            file.on('error', (streamErr) => {
+                logError("Erro no stream parcial do vídeo:", streamErr);
+                if (!res.writableEnded) res.end();
+            });
+        } else {
+            const head = {
+                'Content-Length': fileSize,
+                'Content-Type': mimeType,
+            };
+            res.writeHead(200, head); // OK
+            const file = fs.createReadStream(videoPath);
+            file.pipe(res);
+            file.on('error', (streamErr) => {
+                logError("Erro no stream completo do vídeo:", streamErr);
+                if (!res.writableEnded) res.end();
+            });
+        }
+    } catch (error) {
+        logError("Erro ao processar requisição de vídeo:", error);
+        if (!res.headersSent) {
+            res.status(500).send("Erro ao processar o arquivo de vídeo.");
+        } else if (!res.writableEnded) {
+            res.end(); // Tenta finalizar se headers já foram enviados
+        }
+    }
+});
+
+export default router;
+>>>>>>>packages/backend/src/services/cloudflare.service.ts
+import { spawn, ChildProcess } from 'child_process'; // Importa ChildProcess genérico
+import { logDebug, logError, logInfo, logWarn } from '../utils/logger';
+import qrcode from 'qrcode-terminal';
+import EventEmitter from 'events';
+
+// Usar tipo mais genérico ou manter ChildProcessWithoutNullStreams e ajustar spawn?
+// Vamos com ChildProcess por simplicidade inicial.
+let cloudflaredProcess: ChildProcess | null = null;
+let publicUrl: string | null = null;
+let lastKnownError: string | null = null;
+
+class CloudflareEmitter extends EventEmitter {}
+const tunnelEmitter = new CloudflareEmitter();
+
+const startTunnel = (port: number): void => {
+  if (cloudflaredProcess) {
+    logWarn('Túnel Cloudflare já está em execução ou sendo iniciado.');
+    return;
+  }
+
+  logInfo('\n⏳ Iniciando túnel Cloudflare...');
+  publicUrl = null;
+  lastKnownError = null;
+
+  try {
+    const cloudflaredCmd = 'cloudflared';
+    const tunnelArgs = ['tunnel', '--url', `http://localhost:${port}`, '--no-autoupdate'];
+    // A tipagem aqui pode precisar de ajuste dependendo da versão do @types/node
+    // Mas vamos usar ChildProcess por enquanto.
+    cloudflaredProcess = spawn(cloudflaredCmd, tunnelArgs, { stdio: ['ignore', 'pipe', 'pipe'] });
+
+    const urlRegex = /(https:\/\/[a-z0-9-]+\.trycloudflare\.com)/;
+
+    const processOutput = (data: Buffer | string): string => {
+        const output = data.toString().trim();
+        const match = output.match(urlRegex);
+
+        if (match && !publicUrl) {
+            publicUrl = match[0];
+            logInfo('\n' + '='.repeat(60));
+            logInfo('🎉 TÚNEL PRONTO!');
+            logInfo(`🔗 URL Pública: >>> ${publicUrl} <<<`);
+            logInfo("   (Use esta URL para compartilhar)");
+            qrcode.generate(publicUrl, { small: true }, (qr) => logInfo("\n📱 QR Code:\n" + qr));
+            logInfo(`\n📊 Stats: ${publicUrl}/stats`);
+            logInfo('\n⚠️ O link funciona SOMENTE enquanto este script estiver rodando.');
+            logInfo('   Pressione Ctrl+C aqui para encerrar.');
+            logInfo('='.repeat(60) + '\n');
+            tunnelEmitter.emit('ready', publicUrl);
+        }
+        return output;
+    };
+
+    // --- Adicionar verificações antes de usar cloudflaredProcess ---
+    if (cloudflaredProcess) {
+        cloudflaredProcess.stdout?.on('data', (data) => {
+            const output = processOutput(data);
+            if (output) logDebug('[cloudflared stdout]:', output);
+        });
+
+        cloudflaredProcess.stderr?.on('data', (data) => {
+            const output = processOutput(data);
+            if (output && !output.includes(publicUrl || '___NEVER_MATCH___')) {
+                lastKnownError = output;
+                if (output.includes('ERR') || output.includes('error') || output.includes('failed') || output.includes('warn') || output.includes('level=warning')) {
+                    logWarn(`[cloudflared WARN/ERR]: ${output}`);
+                } else if (!output.includes('INF')) {
+                    logDebug('[cloudflared stderr]:', output);
+                }
+            }
+        });
+
+        cloudflaredProcess.on('close', (code) => {
+            logDebug(`Processo cloudflared encerrado com código ${code}`);
+            const wasRunning = !!publicUrl;
+            publicUrl = null;
+            cloudflaredProcess = null; // Limpa referência *antes* de emitir evento
+
+            if (code !== null && code !== 0) {
+                const message = `Túnel Cloudflare ${wasRunning ? 'encerrado inesperadamente' : 'falhou ao iniciar'} (código ${code}). ${lastKnownError || ''}`.trim();
+                logError(message);
+                tunnelEmitter.emit('error', new Error(message));
+            } else {
+                logInfo('Túnel Cloudflare encerrado normalmente.');
+                tunnelEmitter.emit('close');
+            }
+        });
+
+        cloudflaredProcess.on('error', (err) => {
+            logError(`Erro fatal ao executar o comando 'cloudflared': ${err.message}`);
+            if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+                logError("   Certifique-se de que 'cloudflared' está instalado e no PATH do sistema.");
+            }
+            publicUrl = null;
+            cloudflaredProcess = null; // Limpa referência
+            tunnelEmitter.emit('error', err);
+        });
+    } else {
+         // Se cloudflaredProcess for null após spawn (improvável, mas seguro)
+         const spawnError = new Error('Falha ao iniciar o processo cloudflared (spawn retornou null/undefined).');
+         logError(spawnError.message);
+         tunnelEmitter.emit('error', spawnError);
+    }
+
+  } catch (error) {
+    logError('Falha crítica ao tentar iniciar cloudflared:', error);
+    publicUrl = null;
+    cloudflaredProcess = null;
+    tunnelEmitter.emit('error', error instanceof Error ? error : new Error(String(error)));
+  }
+};
+
+// stopTunnel e getPublicUrl permanecem iguais...
+const stopTunnel = async (signal: NodeJS.Signals = 'SIGTERM', timeoutMs = 3000): Promise<void> => {
+   // ... (código igual ao anterior, já lida com cloudflaredProcess sendo null) ...
+    return new Promise((resolve) => {
+        const currentProcess = cloudflaredProcess; // Captura referência atual
+        if (!currentProcess) {
+            logDebug('stopTunnel: Nenhum processo cloudflared ativo.');
+            resolve();
+            return;
+        }
+
+        logInfo('🔪 Encerrando túnel Cloudflare...');
+        let exited = false;
+
+        const exitListener = (code: number | null) => {
+            logDebug(`Cloudflared saiu com código ${code}.`);
+            exited = true;
+            if (cloudflaredProcess === currentProcess) { // Garante que é o mesmo processo
+               cloudflaredProcess = null;
+               publicUrl = null;
+            }
+            resolve();
+        };
+        currentProcess.once('exit', exitListener);
+
+        try {
+            currentProcess.kill(signal);
+        } catch (e) {
+            logError(`Erro ao enviar ${signal} para cloudflared:`, (e as Error).message);
+            currentProcess.removeListener('exit', exitListener);
+             if (cloudflaredProcess === currentProcess) {
+               cloudflaredProcess = null;
+               publicUrl = null;
+            }
+            resolve();
+            return;
+        }
+
+        if (signal === 'SIGTERM') {
+            setTimeout(() => {
+                if (!exited && cloudflaredProcess === currentProcess) {
+                    logWarn(`Timeout ${signal} cloudflared, enviando SIGKILL.`);
+                    try { currentProcess.kill('SIGKILL'); } catch (killErr) { /* ... */ }
+                     if (cloudflaredProcess === currentProcess) {
+                       cloudflaredProcess = null; publicUrl = null;
+                     }
+                     resolve();
+                }
+            }, timeoutMs);
+        } else {
+             setTimeout(() => {
+                 if (!exited && cloudflaredProcess === currentProcess) {
+                    logWarn('Processo não saiu mesmo após SIGKILL.');
+                    cloudflaredProcess = null; publicUrl = null;
+                 }
+                 resolve();
+             }, 500);
+        }
+    });
+};
+
+const getPublicUrl = (): string | null => {
+    return publicUrl;
+};
+
+
+export const CloudflareService = {
+    startTunnel,
+    stopTunnel,
+    getPublicUrl,
+    emitter: tunnelEmitter,
+};
+>>>>>>>packages/backend/src/services/stats.service.ts
+import path from 'path';
+import config from '../config';
+import fs from 'fs';
+import { logDebug, logError, logInfo, logWarn } from '../utils/logger';
+import { RuntimeStats, StatsData, ViewDetails, ActiveSession, ViewDuration } from '../types/stats.types';
+
+const statsDir = path.resolve(__dirname, '../../stats');
+const statsFile = path.join(statsDir, 'stats_data.json');
+
+// Estado inicial em memória (CORRIGIDO)
+let runtimeStats: RuntimeStats = {
+  videoName: path.basename(config.VIDEO_PATH), // Inicializa com o nome do vídeo do config
+  totalViews: 0,
+  firstView: null,
+  lastView: null,
+  viewDuration: [],
+  viewDetails: [],
+  activeSessions: {}, // Inicializa como objeto vazio
+};
+
+const loadStats = (): void => {
+  if (!fs.existsSync(statsDir)) { /* ... */ }
+
+  if (fs.existsSync(statsFile)) {
+    try {
+      const fileData = fs.readFileSync(statsFile, 'utf8');
+      const persistedStats: StatsData = JSON.parse(fileData);
+      runtimeStats = {
+        ...runtimeStats, // Mantém activeSessions vazio inicial e videoName
+        ...persistedStats, // Sobrescreve o resto com dados do arquivo
+        activeSessions: {}, // Garante que activeSessions está sempre vazio ao carregar
+      };
+      logInfo('Estatísticas carregadas do arquivo.', { totalViews: runtimeStats.totalViews });
+    } catch (error) {
+      logError('Erro ao carregar ou parsear estatísticas, iniciando com dados zerados:', error);
+      // Reseta para estado inicial seguro
+      runtimeStats = {
+          videoName: path.basename(config.VIDEO_PATH), totalViews: 0, firstView: null, lastView: null,
+          viewDuration: [], viewDetails: [], activeSessions: {}
+      };
+    }
+  } else {
+    logInfo('Arquivo de estatísticas não encontrado, iniciando com dados zerados.');
+  }
+};
+
+const saveStats = (): void => {
+  const statsToSave: StatsData = {
+    videoName: runtimeStats.videoName,
+    totalViews: runtimeStats.totalViews,
+    firstView: runtimeStats.firstView,
+    lastView: runtimeStats.lastView,
+    viewDuration: runtimeStats.viewDuration,
+    viewDetails: runtimeStats.viewDetails,
+  };
+  try {
+     if (!fs.existsSync(statsDir)) { fs.mkdirSync(statsDir, { recursive: true }); }
+    fs.writeFileSync(statsFile, JSON.stringify(statsToSave, null, 2));
+    logDebug('Estatísticas salvas no arquivo.');
+  } catch (error) { logError('Erro ao salvar estatísticas no arquivo:', error); }
+};
+
+const addVisit = (ip?: string, userAgent?: string, referrer?: string): void => {
+    const timestamp = new Date().toISOString();
+    if (!runtimeStats.firstView) runtimeStats.firstView = timestamp;
+    runtimeStats.lastView = timestamp;
+    runtimeStats.totalViews++;
+
+    const viewInfo: ViewDetails = {
+        timestamp, ip: ip || 'N/A', userAgent: userAgent || 'N/A',
+        referrer: referrer || 'direct', id: `view_${Date.now()}_${Math.random().toString(36).substring(7)}`
+    };
+    runtimeStats.viewDetails.push(viewInfo);
+    logInfo(`\n🎉 Nova visita #${runtimeStats.totalViews} de ${ip || 'IP desconhecido'}`);
+    saveStats();
+};
+
+const startSession = (sessionId: string, data: Omit<ActiveSession, 'start' | 'lastActive' | 'duration' | 'progress' | 'completed'> & { timestamp?: string }): void => {
+    if (runtimeStats.activeSessions[sessionId]) {
+        logWarn(`Tentativa de iniciar sessão já existente: ${sessionId}`);
+        return;
+    }
+    // Atribui o objeto completo (CORRIGIDO)
+    runtimeStats.activeSessions[sessionId] = {
+        start: new Date(data.timestamp || Date.now()),
+        lastActive: new Date(),
+        userAgent: data.userAgent || 'N/A',
+        language: data.language || 'N/A',
+        screenSize: data.screenSize || 'N/A',
+        ip: data.ip, // ip é opcional na interface
+        duration: 0, // Valor inicial
+        progress: 0, // Valor inicial
+        completed: false, // Valor inicial
+    };
+     logInfo(`\n▶️ Visualização iniciada: ${sessionId.substring(0, 8)}... (${data.ip || 'IP desconhecido'})`);
+     logDebug('Detalhes da sessão iniciada:', runtimeStats.activeSessions[sessionId]);
+};
+
+const updateSession = (sessionId: string, duration: number, progress: number): void => {
+    const session = runtimeStats.activeSessions[sessionId]; // Pega a sessão para facilitar
+    if (!session) {
+        logWarn(`Tentativa de atualizar sessão inexistente: ${sessionId}`);
+        return;
+    }
+    session.lastActive = new Date();
+    session.duration = Math.max(duration || 0, 0);
+    session.progress = Math.min(Math.max(progress || 0, 0), 1);
+    logDebug(`Sessão atualizada: ${sessionId.substring(0, 8)}... Progresso: ${Math.round(session.progress * 100)}%`);
+};
+
+const finalizeSession = (sessionId: string, finalDuration: number, finalProgress: number, isCompleted: boolean): void => {
+  const session = runtimeStats.activeSessions[sessionId];
+  if (!session) {
+    logDebug(`Tentativa de finalizar sessão já encerrada ou inválida: ${sessionId}`);
+    return;
+  }
+
+  const finalProg = Math.min(Math.max(finalProgress || 0, 0), 1);
+  const finalDur = Math.max(finalDuration || 0, 0);
+
+  const viewDurationData: ViewDuration = {
+    sessionId,
+    duration: finalDur,
+    progress: finalProg,
+    completed: isCompleted || finalProg >= 0.95,
+    timestamp: new Date().toISOString(),
+    device: session.userAgent, // Mapeia userAgent para device
+    ip: session.ip,
+  };
+  runtimeStats.viewDuration.push(viewDurationData);
+
+  const status = viewDurationData.completed ? '✅ Completado' : '👋 Saiu';
+  logInfo(`\n${status}: ${sessionId.substring(0, 8)}...`);
+  logInfo(`   ⏱️ Duração: ${Math.round(finalDur)}s`);
+  logInfo(`   📊 Progresso: ${Math.round(finalProg * 100)}%`);
+
+  delete runtimeStats.activeSessions[sessionId];
+  saveStats();
+};
+
+// Interface para o tipo de retorno do sumário
+interface StatsSummary extends Partial<Omit<StatsData, 'viewDuration' | 'viewDetails'>> { // Omit arrays
+    activeSessionsCount: number;
+    viewDurationCount: number;
+    viewDetailsCount: number;
+}
+
+const getStatsSummary = (): StatsSummary => {
+    return {
+        videoName: runtimeStats.videoName,
+        totalViews: runtimeStats.totalViews,
+        firstView: runtimeStats.firstView,
+        lastView: runtimeStats.lastView,
+        viewDurationCount: runtimeStats.viewDuration.length, // Conta os itens
+        viewDetailsCount: runtimeStats.viewDetails.length,   // Conta os itens
+        activeSessionsCount: Object.keys(runtimeStats.activeSessions).length,
+    };
+};
+
+// Exporta as funções que serão usadas externamente
+export const StatsService = {
+    loadStats,
+    saveStats,
+    addVisit,
+    startSession,
+    updateSession,
+    finalizeSession,
+    getStatsSummary,
+};
+>>>>>>>packages/backend/src/types/stats.types.ts
+export interface ViewDetails {
+  timestamp: string;
+  ip?: string;
+  userAgent: string;
+  referrer: string;
+  id: string;
+}
+
+export interface ViewDuration {
+  sessionId: string;
+  duration: number;
+  progress: number;
+  completed: boolean;
+  timestamp: string;
+  device: string; // Corresponde a userAgent na ActiveSession
+  ip?: string;
+}
+
+export interface ActiveSession {
+  start: Date;
+  lastActive: Date;
+  userAgent: string; // 'device' em ViewDuration usa este campo
+  language: string;
+  screenSize: string;
+  ip?: string;
+  duration: number;
+  progress: number;
+  completed: boolean;
+}
+
+export interface StatsData {
+  videoName: string;
+  totalViews: number;
+  firstView: string | null;
+  lastView: string | null;
+  viewDuration: ViewDuration[];
+  viewDetails: ViewDetails[];
+}
+
+// Interface para o objeto gerenciado em memória (CORRIGIDO)
+export interface RuntimeStats extends StatsData {
+  activeSessions: { [sessionId: string]: ActiveSession };
+}
+>>>>>>>packages/backend/src/utils/logger.ts
+import config from '../config';
+
+const getTimestamp = (): string => new Date().toISOString();
+
+export const logInfo = (...args: any[]): void => {
+  console.log(`[INFO ${getTimestamp()}]`, ...args);
+};
+
+export const logDebug = (...args: any[]): void => {
+  if (config.IS_DEV) {
+    console.log(`[DEBUG ${getTimestamp()}]`, ...args);
+  }
+};
+
+export const logWarn = (...args: any[]): void => {
+  console.warn(`[WARN ${getTimestamp()}]`, ...args);
+};
+
+export const logError = (...args: any[]): void => {
+  console.error(`[ERROR ${getTimestamp()}]`, ...args);
+};
+>>>>>>>packages/backend/src/utils/shutdown.ts
+import { Server } from 'http';
+import { CloudflareService } from '../services/cloudflare.service';
+import { StatsService } from '../services/stats.service';
+import { logInfo, logDebug, logError } from './logger';
+
+let isShuttingDown = false;
+
+export const registerGracefulShutdown = (serverInstance: Server | null): void => {
+
+  // --- Aceita string ou Signal ---
+  const handleShutdown = async (signal: NodeJS.Signals | string) => {
+    if (isShuttingDown) {
+      logDebug(`Encerramento já em progresso (recebido ${signal})...`);
+      return;
+    }
+    isShuttingDown = true;
+    logInfo(`\n👋 Recebido evento/sinal ${signal}. Iniciando encerramento gracioso...`);
+
+    // ... (resto da função igual) ...
+    logInfo('💾 Salvando estatísticas finais...');
+    StatsService.saveStats();
+
+    logInfo('🔪 Encerrando túnel Cloudflare...');
+    try {
+        await CloudflareService.stopTunnel('SIGTERM', 3000);
+        logInfo('✅ Túnel Cloudflare encerrado ou timeout atingido.');
+    } catch (tunnelError) { /* ... */ }
+
+    if (serverInstance) {
+        logInfo('🚪 Fechando servidor HTTP...');
+        serverInstance.close((err) => { /* ... */ });
+        setTimeout(() => { /* ... timeout ... */ }, 5000);
+    } else { /* ... */ }
+  };
+
+  process.on('SIGINT', () => handleShutdown('SIGINT'));
+  process.on('SIGTERM', () => handleShutdown('SIGTERM'));
+
+   process.on('uncaughtException', (error) => {
+        logError('--- ERRO NÃO CAPTURADO ---');
+        logError(error.stack || error.message);
+        logError('--------------------------');
+        // --- Chama handleShutdown com a string ---
+        if (!isShuttingDown) {
+            handleShutdown('uncaughtException');
+        }
+        setTimeout(() => process.exit(1), 8000);
+   });
+
+   process.on('unhandledRejection', (reason, promise) => {
+        logError('--- REJEIÇÃO DE PROMISE NÃO TRATADA ---');
+        logError('Razão:', reason);
+        logError('--------------------------------------');
+        // process.exit(1); // Sair diretamente pode ser mais seguro aqui
+   });
+};
+>>>>>>>packages/backend/tsconfig.json
+// packages/backend/tsconfig.json
+{
+    "compilerOptions": {
+      "target": "ES2016", // Ou mais recente (ES2020, ESNext)
+      "module": "CommonJS", // Padrão para Node.js
+      "outDir": "./dist", // Onde o JS compilado será salvo
+      "rootDir": "./src", // Onde estão os arquivos TS fonte
+      "strict": true, // Habilita verificações estritas (recomendado)
+      "esModuleInterop": true, // Permite importações estilo ES6 de módulos CommonJS
+      "skipLibCheck": true, // Pula verificação de tipos em arquivos de declaração (d.ts)
+      "forceConsistentCasingInFileNames": true, // Garante consistência no nome dos arquivos
+      "resolveJsonModule": true, // Permite importar arquivos JSON
+      "sourceMap": true, // Gera sourcemaps para debug
+      // "noUnusedLocals": true, // (Opcional) Avisa sobre variáveis não usadas
+      // "noUnusedParameters": true // (Opcional) Avisa sobre parâmetros não usados
+    },
+    "include": ["src/**/*"], // Inclui todos os arquivos TS dentro de src
+    "exclude": ["node_modules", "dist", "public", "stats"] // Exclui pastas
+  }
+>>>>>>>packages/frontend/package.json
+{
+  "name": "video-share-mfe",
+  "version": "1.0.0",
+  "description": "Video Share MFE using Preact and Custom Elements",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "preact": "^10.19.6",
+    "preact-custom-element": "^4.3.0"
+  },
+  "devDependencies": {
+    "@preact/preset-vite": "^2.10.1",
+    "@types/node": "^20.12.7",
+    "typescript": "^5.4.5",
+    "vite": "^5.2.10"
+  }
+}
+
+>>>>>>>packages/frontend/dev.html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Share MFE (Dev)</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; background-color: #eee; line-height: 1.6; }
+        video-share {
+            display: block;
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 20px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            border: 2px solid cornflowerblue;
+        }
+        h1, h2 { text-align: center; color: #333;}
+        .info { margin-top: 30px; padding: 15px; background-color: #f9f9f9; border-radius: 5px; border: 1px solid #ddd; }
+        #app {
+             max-width: 800px; margin: 20px auto; padding: 20px; background: white; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); border: 2px solid lightcoral;
+        }
+    </style>
+</head>
+<body>
+    <h1>Testing <code><video-share></code> MFE</h1>
+
+    <video-share
+        message="Olá do Custom Element!"
+        video-src="/video">  <!-- Use o path relativo, o proxy cuida disso -->
+         <p>Carregando MFE via Custom Element...</p>
+    </video-share>
+
+    <hr style="margin: 40px 0;">
+
+    <h2>Development Direct Render (Vite HMR)</h2>
+    <p style="text-align: center;">Abaixo, o componente App é renderizado diretamente no #app (ignora o custom element).</p>
+    <div id="app">
+        <!-- App Preact será renderizado aqui em dev via main.tsx -->
+    </div>
+
+    <div class="info">
+      <h2>Notas:</h2>
+      <ul>
+          <li>O elemento superior (borda azul) usa a tag <code><video-share></code> real.</li>
+          <li>O elemento inferior (borda vermelha) mostra o App Preact renderizado diretamente via <code>main.tsx</code> (apenas em dev).</li>
+          <li>Verifique o console do navegador para logs.</li>
+          <li>Requisições para <code>/video</code> e <code>/track</code> devem ser direcionadas para o backend via proxy.</li>
+      </ul>
+    </div>
+
+    <!-- Carrega o ponto de entrada do MFE (Vite gerencia isso em dev) -->
+    <script type="module" src="/src/main.tsx"></script>
+</body>
+</html>
+>>>>>>>packages/frontend/src/App.module.css
+/* Estilos gerais para o container do App MFE e elementos internos */
+.appContainer {
+    /* Define fontes e cores base que podem ser herdadas pelos filhos */
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+    color: #333;
+    line-height: 1.6;
+    /* Padding interno se necessário, diferente do padding do host no dev.html */
+    /* padding: 10px; */
+    background-color: #fff; /* Fundo branco padrão para o conteúdo do MFE */
+    border-radius: inherit; /* Herda o border-radius do host se definido */
+}
+
+/* Caixa de Mensagem (copiado do styles.css original) */
+.messageBox {
+    background-color: #fff8e1; /* Amarelo claro */
+    border-left: 5px solid #ffca28; /* Borda amarela */
+    border-radius: 8px;
+    padding: 15px 20px;
+    margin-bottom: 25px; /* Espaçamento abaixo da mensagem */
+    font-size: 1.05em;
+    color: #5d4037; /* Marrom escuro */
+}
+
+/* Container do Vídeo (copiado do styles.css original) */
+.videoContainer {
+    margin-bottom: 15px; /* Espaço abaixo do vídeo/erro */
+    text-align: center; /* Centraliza o player se tiver margens laterais */
+}
+
+/* Mensagem de Erro (copiado do styles.css original) */
+.errorMessage {
+    color: #d32f2f; /* Vermelho escuro */
+    padding: 12px 15px;
+    border: 1px solid #ef9a9a; /* Borda vermelha clara */
+    background-color: #ffebee; /* Fundo vermelho muito claro */
+    margin-top: 15px; /* Espaço acima da mensagem de erro */
+    border-radius: 8px;
+    font-size: 0.95em;
+    text-align: left;
+    /* display: block; é implícito quando renderizado */
+}
+
+/* Decorações como o coelho (opcional, descomente se quiser dentro do MFE) */
+/*
+.bunny {
+    position: absolute; // Ou fixed, dependendo do contexto desejado
+    bottom: 10px;
+    right: 10px;
+    width: 50px;
+    height: 50px;
+    background-image: url("data:image/svg+xml,..."); // Coloque seu SVG aqui
+    background-repeat: no-repeat;
+    background-size: contain;
+    animation: hop 5s infinite ease-in-out;
+    pointer-events: none;
+    z-index: 10;
+}
+
+@keyframes hop {
+    0%, 100% { transform: translateY(0) scale(1); }
+    10% { transform: translateY(-20px) scale(1.05) rotate(-3deg); }
+    20% { transform: translateY(0) scale(1) rotate(0deg); }
+    50% { transform: translateY(-10px) scale(1.02) rotate(2deg); }
+    60% { transform: translateY(0) scale(1) rotate(0deg); }
+}
+*/
+
+/* Responsividade específica do MFE (se necessário) */
+@media (max-width: 600px) {
+    .messageBox {
+        padding: 10px 15px;
+        font-size: 1em;
+        margin-bottom: 20px;
+    }
+    /* .bunny { width: 40px; height: 40px; } */
+}
+>>>>>>>packages/frontend/src/App.tsx
+import { FunctionalComponent } from 'preact';
+import { useState, useMemo } from 'preact/hooks';
+import { VideoPlayer } from './components/VideoPlayer';
+import { AppProps } from './types';
+import styles from './App.module.css'; // Estilos gerais do App/MFE
+
+// Props recebidas do custom element (definidas em main.tsx)
+interface Props extends AppProps {}
+
+const App: FunctionalComponent<Props> = ({ videoSrc: videoSrcAttr, message }) => {
+    const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+    // Determina a URL final do vídeo
+    const finalVideoSrc = useMemo(() => {
+        const backendBaseUrl = import.meta.env.VITE_BACKEND_URL || ''; // Pode ser ""
+        // Usa o atributo 'video-src' se fornecido, senão o default '/video'
+        const videoPath = videoSrcAttr || '/video';
+        // Constrói a URL completa ou relativa
+        // Evita barras duplicadas se backendBaseUrl ou videoPath já tiverem
+        if (backendBaseUrl && videoPath.startsWith('/')) {
+             // Se backendBaseUrl não termina com / e videoPath começa com /
+             if (!backendBaseUrl.endsWith('/')) {
+                return `${backendBaseUrl}${videoPath}`;
+             }
+             // Se backendBaseUrl termina com / e videoPath começa com /
+             return `${backendBaseUrl}${videoPath.substring(1)}`;
+        } else if (backendBaseUrl) {
+            // Se backendBaseUrl existe e videoPath não começa com / (improvável, mas seguro)
+             return `${backendBaseUrl}/${videoPath}`;
+        }
+        // Se não há backendBaseUrl, usa o path relativo como está
+        return videoPath;
+    }, [videoSrcAttr]); // Recalcula apenas se o atributo mudar
+
+    return (
+        // Container principal do MFE dentro do Shadow DOM
+        <div className={styles.appContainer}>
+
+            {/* Mensagem opcional passada via atributo */}
+            {message && (
+                <div className={styles.messageBox}>
+                    <p>{message}</p>
+                </div>
+            )}
+
+            {/* Mensagem padrão se nenhuma for passada (opcional) */}
+            {!message && (
+                 <div className={styles.messageBox}>
+                     <p>Vídeo especial carregado!</p> {/* Mensagem Padrão */}
+                 </div>
+             )}
+
+            {/* Container do Vídeo e Erro */}
+            <div className={styles.videoContainer}>
+                <VideoPlayer src={finalVideoSrc} onErrorChange={setErrorMessage} />
+                {errorMessage && (
+                    <div className={styles.errorMessage}>
+                        {errorMessage}
+                    </div>
+                )}
+            </div>
+
+            {/* Elementos decorativos podem ser adicionados aqui se fizerem parte do MFE */}
+            {/* <div class={styles.bunny}></div> */}
+        </div>
+    );
+};
+
+export default App;
+>>>>>>>packages/frontend/src/components/VideoPlayer.module.css
+/* Estilos especificos para o elemento video dentro do componente VideoPlayer */
+.videoElement {
+    display: block; /* Remove espaço extra abaixo */
+    width: 100%; /* Ocupa largura total do container pai */
+    max-width: 100%;
+    height: auto; /* Mantém a proporção */
+    border-radius: 8px; /* Bordas arredondadas */
+    background-color: #000; /* Fundo preto para área do vídeo */
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1); /* Sombra leve */
+    outline: none; /* Remove outline padrão ao focar */
+    /* Garante que os controles nativos sejam visíveis sobre o fundo preto */
+    color-scheme: light dark; /* Ajuda na adaptação dos controles ao tema */
+}
+
+/* Opcional: Estilizar controles (pode variar entre navegadores) */
+/* .videoElement::-webkit-media-controls-panel { ... } */
+>>>>>>>packages/frontend/src/components/VideoPlayer.tsx
+import { FunctionalComponent } from 'preact';
+import { useRef, useEffect } from 'preact/hooks';
+import { useTracking } from '../hooks/useTracking';
+import styles from './VideoPlayer.module.css';
+
+interface VideoPlayerProps {
+    src?: string;
+    onErrorChange: (message: string | null) => void;
+}
+
+export const VideoPlayer: FunctionalComponent<VideoPlayerProps> = ({ src, onErrorChange }) => {
+    const videoRef = useRef<HTMLVideoElement>(null);
+    const {
+        handlePlay,
+        handlePlaying,
+        handlePause,
+        handleEnded,
+        handleError: handleTrackingError, // Renomeado para evitar conflito com o handler local
+        handleSeeked,
+    } = useTracking(videoRef);
+
+    // Efeito para lidar com mudança no src
+    useEffect(() => {
+        if (videoRef.current && src && videoRef.current.src !== src) {
+            console.log(`[VideoPlayer] Setting video source to: ${src}`);
+            videoRef.current.src = src;
+            videoRef.current.load();
+            onErrorChange(null); // Limpa erros anteriores ao mudar a fonte
+        } else if (videoRef.current && !src) {
+            console.warn('[VideoPlayer] No video source provided.');
+            if (videoRef.current.src) videoRef.current.src = ''; // Limpa se não houver src
+        }
+    }, [src, onErrorChange]);
+
+    // Efeito para adicionar e remover listeners de eventos
+    useEffect(() => {
+        const video = videoRef.current;
+        if (!video) return;
+
+        // Handler de erro local que atualiza a UI e chama o hook de tracking
+        const onError = () => {
+            const error = video.error;
+            const errorMessage = `Erro ao carregar vídeo: ${error?.message || 'Desconhecido'} (Code: ${error?.code || 'N/A'})`;
+            console.error('[VideoPlayer] Video error event:', error);
+            onErrorChange(errorMessage); // Atualiza a UI do componente pai (App)
+            handleTrackingError();     // Chama o handler de erro do hook de tracking
+        };
+
+        // Adiciona listeners
+        video.addEventListener('play', handlePlay);
+        video.addEventListener('playing', handlePlaying);
+        video.addEventListener('pause', handlePause);
+        video.addEventListener('ended', handleEnded);
+        video.addEventListener('error', onError); // Usa o handler local
+        video.addEventListener('seeked', handleSeeked);
+
+        // Função de cleanup para remover listeners
+        return () => {
+            video.removeEventListener('play', handlePlay);
+            video.removeEventListener('playing', handlePlaying);
+            video.removeEventListener('pause', handlePause);
+            video.removeEventListener('ended', handleEnded);
+            video.removeEventListener('error', onError);
+            video.removeEventListener('seeked', handleSeeked);
+        };
+        // As dependências garantem que os listeners sejam atualizados se os handlers mudarem
+    }, [handlePlay, handlePlaying, handlePause, handleEnded, handleTrackingError, handleSeeked, onErrorChange]);
+
+
+    return (
+        <video
+            ref={videoRef}
+            id="videoPlayerMFE" // ID único se necessário para CSS ou testes
+            controls
+            playsInline // Essencial para autoplay em mobile (se aplicável)
+            preload="metadata" // Carrega metadados (duração, dimensões) sem baixar o vídeo
+            className={styles.videoElement}
+            // Não definir src aqui, ele é controlado pelo useEffect
+        >
+            {/* Fallback message */}
+            Seu navegador não suporta a tag de vídeo HTML5.
+        </video>
+    );
+};
+>>>>>>>packages/frontend/src/global.d.ts
+// cssmodules.d.ts
+declare module '*.module.css' {
+    const classes: { [key: string]: string };
+    export default classes;
+  }
+  
+>>>>>>>packages/frontend/src/hooks/useTracking.ts
+// packages/frontend/src/hooks/useTracking.ts
+import { useState, useEffect, useRef, useCallback } from 'preact/hooks';
+import { sendTrackingData, generateSessionId } from '../services/trackingAPI';
+import { TrackingEndpoint, TrackingData } from '../types';
+
+export function useTracking(videoElementRef: preact.RefObject<HTMLVideoElement>) {
+    const [sessionId, setSessionId] = useState<string | null>(null);
+    const startTimeRef = useRef<Date | null>(null); // Ref to avoid re-renders on update
+    const watchDurationRef = useRef<number>(0); // Ref for accumulated time
+    const isPlayingRef = useRef<boolean>(false);
+    const viewStartedRef = useRef<boolean>(false);
+    const heartbeatIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+    const clearHeartbeat = () => {
+        if (heartbeatIntervalRef.current) {
+            clearInterval(heartbeatIntervalRef.current);
+            heartbeatIntervalRef.current = null;
+        }
+    };
+
+    // Send data function using the API service
+    const sendEvent = useCallback((endpoint: TrackingEndpoint, eventData: Omit<TrackingData, 'sessionId'>) => {
+        if (!sessionId) return;
+        sendTrackingData(endpoint, { ...eventData, sessionId });
+    }, [sessionId]); // Recreate only if sessionId changes
+
+    // Start session
+    const startTrackingSession = useCallback(() => {
+        if (viewStartedRef.current) return;
+        const newSessionId = generateSessionId();
+        setSessionId(newSessionId);
+        viewStartedRef.current = true;
+        console.log(`[useTracking] Starting session: ${newSessionId}`);
+        sendTrackingData('start', { // Use sendTrackingData directly here as sessionId state might not be updated yet
+            sessionId: newSessionId,
+            userAgent: navigator.userAgent,
+            language: navigator.language,
+            screenSize: `${window.screen.width}x${window.screen.height}`,
+            timestamp: new Date().toISOString()
+        });
+    }, []); // No dependencies needed
+
+    // Update duration logic
+    const updateWatchDuration = useCallback(() => {
+        if (isPlayingRef.current && startTimeRef.current) {
+            const segmentDuration = (new Date().getTime() - startTimeRef.current.getTime()) / 1000;
+            watchDurationRef.current += segmentDuration;
+            startTimeRef.current = new Date(); // Reset start time for next segment
+            console.log(`[useTracking] Accumulated duration: ${watchDurationRef.current.toFixed(2)}s`);
+        }
+    }, []); // No dependencies
+
+    // Start heartbeat timer
+    const startHeartbeat = useCallback(() => {
+        clearHeartbeat();
+        heartbeatIntervalRef.current = setInterval(() => {
+            const video = videoElementRef.current;
+            if (isPlayingRef.current && video && video.duration > 0 && !video.paused && !video.ended) {
+                const currentPlayDuration = startTimeRef.current ? (new Date().getTime() - startTimeRef.current.getTime()) / 1000 : 0;
+                sendEvent('heartbeat', {
+                    duration: watchDurationRef.current + currentPlayDuration,
+                    progress: video.currentTime / video.duration,
+                });
+            } else {
+                // Stop heartbeat if not playing
+               clearHeartbeat();
+            }
+        }, 30000); // 30 seconds
+    }, [sendEvent, videoElementRef]);
+
+    // --- Event Handlers ---
+
+    const handlePlay = useCallback(() => {
+        console.log('[useTracking] handlePlay');
+        if (!viewStartedRef.current) {
+            startTrackingSession();
+        }
+        if (!isPlayingRef.current) { // Avoid resetting time if resuming from buffer/seek while playing
+            isPlayingRef.current = true;
+            startTimeRef.current = new Date();
+        }
+        startHeartbeat();
+    }, [startTrackingSession, startHeartbeat]);
+
+    const handlePlaying = useCallback(() => {
+         console.log('[useTracking] handlePlaying (resumed)');
+         // This ensures tracking resumes if paused due to buffering
+         if (!isPlayingRef.current) {
+             handlePlay();
+         }
+    }, [handlePlay]);
+
+    const handlePause = useCallback(() => {
+        console.log('[useTracking] handlePause');
+        if (!viewStartedRef.current || !isPlayingRef.current) return;
+
+        updateWatchDuration();
+        isPlayingRef.current = false;
+        clearHeartbeat();
+
+        const video = videoElementRef.current;
+        if (video && video.duration > 0) {
+            sendEvent('pause', {
+                duration: watchDurationRef.current,
+                progress: video.currentTime / video.duration,
+            });
+        }
+    }, [updateWatchDuration, sendEvent, videoElementRef]);
+
+    const handleEnded = useCallback(() => {
+        console.log('[useTracking] handleEnded');
+        if (!viewStartedRef.current) return;
+
+        updateWatchDuration(); // Capture final segment
+        isPlayingRef.current = false;
+        clearHeartbeat();
+
+        sendEvent('complete', {
+            duration: watchDurationRef.current,
+            completed: true,
+        });
+    }, [updateWatchDuration, sendEvent]);
+
+    const handleError = useCallback(() => {
+        console.log('[useTracking] handleError');
+        const video = videoElementRef.current;
+        const error = video?.error;
+        if (!viewStartedRef.current) return; // Don't track errors if session hasn't started
+
+        isPlayingRef.current = false;
+        clearHeartbeat();
+        // Optionally update duration up to the point of error?
+        // updateWatchDuration();
+
+        sendEvent('error', {
+            errorCode: error?.code ?? 'unknown',
+            errorMessage: error?.message ?? 'Unknown video error',
+        });
+    }, [sendEvent, videoElementRef]);
+
+    const handleSeeked = useCallback(() => {
+        const video = videoElementRef.current;
+         console.log(`[useTracking] handleSeeked to ${video?.currentTime.toFixed(2)}s`);
+         if (!viewStartedRef.current) return;
+         // If playing, reset the start time for duration calculation
+         if (isPlayingRef.current) {
+             startTimeRef.current = new Date();
+         }
+         // Optionally send a 'seek' event if desired
+         // sendEvent('seek', { currentTime: video.currentTime });
+    }, []);
+
+    // --- Effect for Unload ---
+    useEffect(() => {
+        const handleUnload = () => {
+             console.log('[useTracking] handleUnload');
+            if (!viewStartedRef.current) return;
+
+            updateWatchDuration(); // Capture final time before leaving
+            clearHeartbeat();
+
+            const video = videoElementRef.current;
+            const progress = (video && video.duration > 0) ? video.currentTime / video.duration : 0;
+
+            // Use sendEvent for consistency (it handles sendBeacon internally)
+             sendEvent('exit', {
+                 duration: watchDurationRef.current,
+                 progress: progress,
+             });
+        };
+
+        window.addEventListener('beforeunload', handleUnload);
+
+        // Cleanup function: remove listener when component unmounts
+        return () => {
+             console.log('[useTracking] Cleaning up unload listener');
+            window.removeEventListener('beforeunload', handleUnload);
+             // Also clear heartbeat on unmount just in case
+            clearHeartbeat();
+        };
+    }, [sendEvent, updateWatchDuration, videoElementRef]); // Ensure dependencies are correct
+
+    // Return handlers to be attached to the video element
+    return {
+        handlePlay,
+        handlePlaying,
+        handlePause,
+        handleEnded,
+        handleError,
+        handleSeeked,
+        // No need to return state like isPlaying, sessionId etc. unless the UI needs it
+    };
+}
+>>>>>>>packages/frontend/src/main.tsx
+// packages/frontend/src/main.ts
+import './styles.css';
+
+console.log('[Frontend] Script inicializado.');
+
+// --- CONSTANTES ---
+// BACKEND_URL e IS_DEV removidos. Usaremos caminhos relativos.
+// O navegador resolverá automaticamente esses caminhos com base na origem atual (domínio do CloudFront).
+console.log(`[Frontend] Usando caminhos relativos para o backend (mesma origem).`);
+
+// --- Seletores DOM ---
+// Adicionando type assertions para melhor integração com TypeScript
+const videoPlayer = document.getElementById('videoPlayer') as HTMLVideoElement | null;
+const errorMessage = document.getElementById('errorMessage') as HTMLElement | null;
+const videoSourceElement = videoPlayer?.querySelector('source') as HTMLSourceElement | null;
+
+// --- Estado do Tracking ---
+let sessionId: string | null = null;
+let startTime: Date | null = null;
+let watchDuration: number = 0;
+let isPlaying: boolean = false;
+// Usar ReturnType<typeof setInterval> para tipar corretamente o retorno de setInterval
+let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
+let viewStarted: boolean = false;
+
+// --- Funções Auxiliares ---
+
+function generateSessionId(): string {
+    return Math.random().toString(36).substring(2, 15) + Date.now().toString(36) + Math.random().toString(36).substring(2, 15);
+}
+
+// Adicionando tipos aos parâmetros e retorno async
+async function sendTrackingData(endpoint: string, data: Record<string, any>): Promise<void> {
+    if (!sessionId) {
+        console.warn("[Tracking] Session ID não gerado ainda.");
+        return;
+    }
+    // Usa um caminho relativo que o navegador resolverá para a origem atual.
+    const url = `/track/${endpoint}`; // <-- Caminho relativo
+    console.log(`[Tracking] Enviando para: ${url}`);
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sessionId, ...data }),
+            keepalive: endpoint === 'exit' // Importante para 'exit'
+        });
+        if (!response.ok) {
+            console.error(`[Tracking] Erro ao enviar para ${endpoint}: ${response.status} ${response.statusText}`);
+            try {
+                const errorBody = await response.text();
+                console.error(`[Tracking] Corpo da resposta de erro: ${errorBody}`);
+            } catch (_) {
+                // Ignora erro ao ler corpo da resposta
+            }
+        } else {
+            console.log(`[Tracking] Evento '${endpoint}' enviado.`);
+        }
+    } catch (error) {
+        // Tipar o erro como 'unknown' e depois verificar
+        if (error instanceof Error) {
+            console.error(`[Tracking] Falha na requisição para ${endpoint} (${url}):`, error.message);
+        } else {
+            console.error(`[Tracking] Falha desconhecida na requisição para ${endpoint} (${url}):`, error);
+        }
+    }
+}
+
+// --- Lógica de Tracking ---
+
+function startTrackingSession(): void {
+    if (viewStarted) return; // Já iniciado
+    sessionId = generateSessionId();
+    viewStarted = true;
+    console.log(`[Tracking] Iniciando sessão: ${sessionId}`);
+    sendTrackingData('start', {
+        userAgent: navigator.userAgent,
+        language: navigator.language,
+        screenSize: `${window.screen.width}x${window.screen.height}`,
+        timestamp: new Date().toISOString()
+    });
+}
+
+function startHeartbeat(): void {
+    if (heartbeatInterval) {
+        clearInterval(heartbeatInterval); // Limpa intervalo existente, se houver
+    }
+    heartbeatInterval = setInterval(() => {
+        // Adiciona verificação para videoPlayer existir
+        if (isPlaying && videoPlayer && videoPlayer.duration > 0 && startTime) {
+            const currentPlayDuration = (new Date().getTime() - startTime.getTime()) / 1000;
+            sendTrackingData('heartbeat', {
+                duration: watchDuration + currentPlayDuration,
+                progress: videoPlayer.currentTime / videoPlayer.duration
+            });
+        } else if (!isPlaying && heartbeatInterval) {
+            clearInterval(heartbeatInterval);
+            heartbeatInterval = null; // Reseta o ID do intervalo
+        }
+    }, 30000); // A cada 30 segundos
+}
+
+function updateWatchDuration(): void {
+    if (isPlaying && startTime) {
+        const segmentDuration = (new Date().getTime() - startTime.getTime()) / 1000;
+        watchDuration += segmentDuration;
+        startTime = new Date(); // Reinicia o startTime para o próximo segmento
+        console.log(`[Tracking] Duração acumulada: ${watchDuration.toFixed(2)}s`);
+    }
+}
+
+// --- Event Listeners do Vídeo ---
+
+// Adiciona verificação primária para videoPlayer e errorMessage
+if (videoPlayer && errorMessage) {
+    videoPlayer.addEventListener('error', () => {
+        const error = videoPlayer.error;
+        console.error('[Player] Erro:', error);
+        // Usar optional chaining para segurança
+        errorMessage.textContent = `Erro ao carregar vídeo: ${error?.message ?? 'desconhecido'} (Code: ${error?.code ?? 'N/A'})`;
+        errorMessage.style.display = 'block';
+        if (viewStarted) {
+            sendTrackingData('error', {
+                errorCode: error?.code ?? 'unknown',
+                errorMessage: error?.message ?? 'Erro desconhecido'
+            });
+        }
+    });
+
+    videoPlayer.addEventListener('play', () => {
+        console.log('[Player] Play');
+        if (!viewStarted) {
+            startTrackingSession();
+        }
+        isPlaying = true;
+        startTime = new Date();
+        errorMessage.style.display = 'none'; // Esconde mensagem de erro ao dar play
+        startHeartbeat();
+    });
+
+    videoPlayer.addEventListener('playing', () => {
+        console.log('[Player] Playing (após buffer/seek)');
+        // Garante que iniciamos o tracking se não estava tocando antes
+        if (!isPlaying) {
+            isPlaying = true;
+            startTime = new Date();
+            if (!viewStarted) startTrackingSession();
+            startHeartbeat();
+        }
+    });
+
+
+    videoPlayer.addEventListener('pause', () => {
+        console.log('[Player] Pause');
+        if (!viewStarted || !isPlaying) return; // Só processa se estava tocando
+        updateWatchDuration();
+        isPlaying = false;
+        startTime = null; // Reseta startTime ao pausar
+        if (heartbeatInterval) {
+             clearInterval(heartbeatInterval);
+             heartbeatInterval = null;
+        }
+        if (videoPlayer.duration > 0) {
+             sendTrackingData('pause', {
+                duration: watchDuration,
+                progress: videoPlayer.currentTime / videoPlayer.duration
+             });
+        }
+    });
+
+    videoPlayer.addEventListener('ended', () => {
+        console.log('[Player] Ended');
+        if (!viewStarted) return;
+        // Atualiza a duração final se estava tocando
+        if (isPlaying) {
+            updateWatchDuration();
+        }
+        isPlaying = false;
+        startTime = null;
+        if (heartbeatInterval) {
+             clearInterval(heartbeatInterval);
+             heartbeatInterval = null;
+        }
+        sendTrackingData('complete', {
+            duration: watchDuration,
+            completed: true
+        });
+    });
+
+    videoPlayer.addEventListener('seeked', () => {
+        console.log(`[Player] Seeked to ${videoPlayer.currentTime.toFixed(2)}s`);
+        if (!viewStarted) return;
+        // Reinicia startTime se estava tocando para calcular corretamente o tempo assistido após o seek
+        if (isPlaying) {
+            startTime = new Date();
+        }
+        // Poderia enviar um evento 'seek' aqui se necessário
+        // sendTrackingData('seek', { currentTime: videoPlayer.currentTime, duration: watchDuration });
+    });
+
+    // --- Tracking de Saída da Página ---
+    window.addEventListener('beforeunload', () => {
+        console.log('[Tracking] Usuário saindo da página...');
+        if (!viewStarted) return;
+
+        // Garante que a última duração assistida seja calculada
+        if (isPlaying) {
+            updateWatchDuration();
+        }
+        if (heartbeatInterval) {
+            clearInterval(heartbeatInterval);
+            heartbeatInterval = null;
+        }
+
+        // Usa sendBeacon se disponível (mais confiável no unload)
+        if (navigator.sendBeacon) {
+             const data = JSON.stringify({
+                sessionId,
+                duration: watchDuration,
+                // Adiciona verificação para videoPlayer existir
+                progress: (videoPlayer && videoPlayer.duration > 0) ? videoPlayer.currentTime / videoPlayer.duration : 0
+             });
+             const exitUrl = `/track/exit`; // <-- Caminho relativo
+             try {
+               // sendBeacon espera um Blob, ArrayBufferView, FormData ou USVString
+               // JSON.stringify retorna string, que é USVString
+               const sent = navigator.sendBeacon(exitUrl, data);
+               console.log(`[Tracking] sendBeacon para 'exit' (${exitUrl}) ${sent ? 'enfileirado' : 'falhou'}. Payload: ${data}`);
+             } catch (e) {
+                 console.error("[Tracking] Erro ao usar sendBeacon:", e);
+                 // Fallback SÍNCRONO (não recomendado, mas como último recurso)
+                 // Nota: fetch keepalive=true é a melhor alternativa se sendBeacon falhar,
+                 // mas a implementação original já usa fetch no 'sendTrackingData'
+                 sendTrackingData('exit', { duration: watchDuration, progress: (videoPlayer && videoPlayer.duration > 0) ? videoPlayer.currentTime / videoPlayer.duration : 0 });
+             }
+        } else {
+            // Fallback para fetch (menos confiável no unload, mas 'keepalive' ajuda)
+            sendTrackingData('exit', { duration: watchDuration, progress: (videoPlayer && videoPlayer.duration > 0) ? videoPlayer.currentTime / videoPlayer.duration : 0 });
+        }
+    });
+
+    // --- Definir origem do vídeo usando URL relativa ---
+    if (videoSourceElement) {
+        const videoUrl = `/video`; // <-- Caminho relativo para o vídeo
+        videoSourceElement.src = videoUrl;
+        videoPlayer.load(); // Recarrega a origem do vídeo
+        console.log(`[Frontend] Origem do vídeo definida para: ${videoUrl}`);
+    } else {
+         console.error('[Frontend] Elemento <source> não encontrado dentro do <video>.');
+    }
+
+} else {
+     // Informa se algum elemento essencial não foi encontrado
+     if (!videoPlayer) console.error('[Frontend] Elemento <video id="videoPlayer"> não encontrado.');
+     if (!errorMessage) console.error('[Frontend] Elemento <div id="errorMessage"> não encontrado.');
+}
+
+// --- Inicialização ---
+console.log('[Frontend] Event listeners configurados (se elementos foram encontrados).');
+>>>>>>>packages/frontend/src/services/trackingAPI.ts
+import { TrackingData, TrackingEndpoint } from '../types';
+
+// Determina a URL do Backend: VITE_BACKEND_URL ou assume mesma origem
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || '';
+const IS_DEV = import.meta.env.DEV;
+
+console.log(`[TrackingAPI] Mode: ${IS_DEV ? 'Development' : 'Production'}. Backend URL: '${BACKEND_URL || window.location.origin}'`);
+
+export async function sendTrackingData(endpoint: TrackingEndpoint, data: Omit<TrackingData, 'sessionId'> & { sessionId: string | null }): Promise<void> {
+    if (!data.sessionId) {
+        console.warn("[TrackingAPI] Session ID missing. Aborting send.");
+        return;
+    }
+
+    const url = `${BACKEND_URL}/track/${endpoint}`;
+    console.log(`[TrackingAPI] Sending '${endpoint}' to: ${url}`);
+
+    if (endpoint === 'exit' && navigator.sendBeacon) {
+        try {
+            const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+            const sent = navigator.sendBeacon(url, blob);
+            console.log(`[TrackingAPI] sendBeacon for 'exit' ${sent ? 'enqueued' : 'failed'}.`);
+            if (sent) return;
+        } catch (e) {
+            console.error("[TrackingAPI] Error using sendBeacon, falling back to fetch:", e);
+        }
+    }
+
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+            keepalive: endpoint === 'exit', // Importante para fetch no unload
+        });
+        if (!response.ok) {
+             console.error(`[TrackingAPI] Error sending ${endpoint}: ${response.status} ${response.statusText}`, await response.text().catch(() => ''));
+        } else {
+            // console.log(`[TrackingAPI] Event '${endpoint}' sent successfully.`); // Pode ser verboso
+        }
+    } catch (error) {
+        console.error(`[TrackingAPI] Network error sending ${endpoint} to ${url}:`, error);
+    }
+}
+
+export function generateSessionId(): string {
+    // Combinação simples para gerar um ID razoavelmente único
+    return Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
+}
+>>>>>>>packages/frontend/src/types.ts
+export interface TrackingEventBase {
+  sessionId: string;
+}
+
+export interface StartEventData extends TrackingEventBase {
+  userAgent: string;
+  language: string;
+  screenSize: string;
+  timestamp: string; // ISO string
+}
+
+export interface HeartbeatEventData extends TrackingEventBase {
+  duration: number; // seconds
+  progress: number; // 0 to 1
+}
+
+export interface PauseEventData extends TrackingEventBase {
+   duration: number;
+   progress: number;
+}
+
+export interface CompleteEventData extends TrackingEventBase {
+    duration: number;
+    completed: boolean;
+}
+
+export interface ErrorEventData extends TrackingEventBase {
+    errorCode: number | string;
+    errorMessage: string;
+}
+
+export interface ExitEventData extends TrackingEventBase {
+    duration: number;
+    progress: number;
+}
+
+export type TrackingData = StartEventData | HeartbeatEventData | PauseEventData | CompleteEventData | ErrorEventData | ExitEventData;
+export type TrackingEndpoint = 'start' | 'heartbeat' | 'pause' | 'complete' | 'error' | 'exit';
+
+// Props for the main App component, derived from custom element attributes
+export interface AppProps {
+    videoSrc?: string; // Attribute: video-src
+    message?: string;  // Attribute: message
+}
+>>>>>>>packages/frontend/tsconfig.json
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "node",
+    "jsx": "react-jsx",
+    "jsxImportSource": "preact",
+    "strict": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"]
+    },
+    "lib": ["DOM", "DOM.Iterable", "ESNext"]
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx", "vite.config.ts"],
+  "exclude": ["node_modules", "dist"]
+}
+>>>>>>>packages/frontend/vite.config.ts
+import { defineConfig, loadEnv } from 'vite';
+import preact from '@preact/preset-vite'; // Correto
+import path from 'path';
+// import cssInjectedByJsPlugin from 'vite-plugin-css-injected-by-js'; // <-- REMOVIDO
+
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '');
+  const isProduction = mode === 'production';
+  const outputDir = isProduction ? '../backend/public/mfe/video-share' : 'dist';
+  const base = isProduction ? '/mfe/video-share/' : '/';
+
+  console.log(`--- Vite ---`);
+  console.log(`Mode: ${mode}`);
+  console.log(`Output Directory: ${outputDir}`);
+  // ... outros logs ...
+  console.log(`------------`);
+
+  return {
+    plugins: [
+      preact(),
+      // cssInjectedByJsPlugin(), // <-- REMOVIDO
+    ],
+    define: {
+      'process.env.NODE_ENV': JSON.stringify(mode),
+    },
+    build: {
+      // Garante que o CSS será gerado separadamente (geralmente o padrão)
+      // cssCodeSplit: true, // O padrão já é true, não precisa setar explicitamente
+      outDir: outputDir,
+      sourcemap: !isProduction,
+      lib: {
+        entry: path.resolve(__dirname, 'src/main.tsx'),
+        name: 'VideoShareMFE', // <-- NOME REQUERIDO PARA IIFE/UMD ADICIONADO DE VOLTA
+        fileName: (format) => `video-share-mfe.${format === 'es' ? 'js' : format}`,
+        formats: ['iife'],
+      },
+      emptyOutDir: true,
+    },
+    server: {
+      port: 8080,
+      open: '/dev.html',
+      proxy: {
+        '/video': {
+          target: env.VITE_DEV_BACKEND_TARGET || 'http://localhost:3000',
+          changeOrigin: true,
+        },
+        '/track': {
+          target: env.VITE_DEV_BACKEND_TARGET || 'http://localhost:3000',
+          changeOrigin: true,
+        },
+      },
+    },
+    resolve: {
+      alias: {
+        '@': path.resolve(__dirname, 'src'),
+      },
+    },
+    base: base,
+  };
+});

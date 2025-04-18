@@ -30,10 +30,10 @@ Monorepo para a aplicação de compartilhamento de vídeos com frontend e backen
 
 # Garanta que tudo está commitado
 git add .
-git commit -m "feat: workspaces"
+git commit -m "feat: frontend to Typescript"
 
 # Crie a nova tag
-git tag -a v1.0.1 -m "Backend to Typescript"
+git tag -a v1.0.2 -m "Frontend to Typescript"
 
 # Envie a tag para o repositório remoto
-git push origin v1.0.0
+git push origin v1.0.2

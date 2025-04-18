@@ -7,10 +7,10 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "npm run build -w video-share-backend && npm run build -w video-share-frontend",
+    "build": "npm run build -w video-share-backend && npm run build -w video-share-mfe",
     "start": "npm run start -w video-share-backend",
     "start:backend": "npm run start -w video-share-backend",
-    "dev:frontend": "npm run dev -w video-share-frontend",
+    "dev:frontend": "npm run dev -w video-share-mfe",
     "dev:backend": "cross-env NODE_ENV=development npm run dev -w video-share-backend",
     "dev": "concurrently \"npm:dev:frontend\" \"npm:dev:backend\""
   },
